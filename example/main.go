@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -11,36 +12,24 @@ import (
 )
 
 const (
-	kafkaConn   = "localhost:9092"
-	KAFKA_TOPIC = "words"
+	kafkaConn  = "localhost:9092"
+	KafkaTopic = "words"
 )
 
 var client schemaregistry.Client
 
-var schema = `{
-	  "type": "record",
-	  "name": "words",
-	  "doc:": "Just words",
-	  "namespace": "com.avro.kafka.golang",
-	  "fields": [
-		{
-		  "type": "string",
-		  "name": "word"
-		}
-	  ]
-	}
-	`
-
+// WordWasRead Sample event
 type WordWasRead struct {
 	Word string
 }
 
+// AvroSchema for WasReadEvent
 func (word WordWasRead) AvroSchema() string {
 	return `{
 		"type": "record",
 		"name": "words",
 		"doc:": "Just words",
-		"namespace": "com.avro.kafka.golang",
+		"namespace": "avrostry.samples.events",
 		"fields": [
 		{
 			"type": "string",
@@ -56,6 +45,22 @@ func (word WordWasRead) Version() int {
 }
 func (word WordWasRead) Subject() string {
 	return "ddd:words:read"
+}
+
+func (word *WordWasRead) FromPayload(m map[string]interface{}) error {
+	// Take simple fields
+	data, _ := json.Marshal(m)
+	err := json.Unmarshal(data, word)
+
+	return err
+}
+
+func (word *WordWasRead) ToPayload() map[string]interface{} {
+	datumIn := map[string]interface{}{
+		"Word": word.Word,
+	}
+
+	return datumIn
 }
 
 func createProducer() *avrostry.EventRegistryProducer {
@@ -78,29 +83,9 @@ func createProducer() *avrostry.EventRegistryProducer {
 }
 
 func main() {
-	word := WordWasRead{Word: "palabrota"}
+	word := &WordWasRead{Word: "palabrota"}
 
 	erp := createProducer()
 	erp.Publish(word)
-	/*
-		// var domainEvents []DomainEvent
-		subjects, _ := erp.client.Subjects()
-		for _, subject := range subjects {
-			versions, err := client.Versions(subject)
-			if err != nil {
-				fmt.Println(err)
-			}
-			schema, err := client.GetSchemaBySubject(subject, max(versions))
-			if err != nil {
-				fmt.Println(err)
-			}
 
-			fmt.Println(subject, schema)
-		}
-	*/
-}
-
-func max(arr []int) int {
-	// todo: implement
-	return 1
 }

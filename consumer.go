@@ -15,49 +15,50 @@ const (
 	topic         = "words"
 )
 
-type RegistryConsumerGroup struct {
+type KafkaRegistryConsumerGroup struct {
 	cg           *consumergroup.ConsumerGroup
 	kafkaDecoder *KafkaAvroDecoder
 }
 
-func NewKafkaStreamReaderRegistry() RegistryConsumerGroup {
+// NewKafkaStreamReaderRegistry Constructor for KafkaRegistryConsumerGroup
+func NewKafkaStreamReaderRegistry() (KafkaRegistryConsumerGroup, error) {
+	var (
+		rcg KafkaRegistryConsumerGroup
+		err error
+	)
 	config := consumergroup.NewConfig()
 	config.Offsets.Initial = sarama.OffsetOldest
 	config.Offsets.ProcessingTimeout = 10 * time.Second
 
 	// join to consumer group
 	// TODO: Handle error
-	cg, _ := consumergroup.JoinConsumerGroup(cgroup, []string{topic}, []string{zookeeperConn}, config)
+	cg, err := consumergroup.JoinConsumerGroup(cgroup, []string{topic}, []string{zookeeperConn}, config)
+	if err != nil {
+		return rcg, err
+	}
+
 	// TODO: Handle error
 	kafkaDecoder := NewKafkaAvroDecoder("http://127.0.0.1:8081")
-	// client, _ := schemaregistry.NewClient("http://127.0.0.1:8081")
-	rcg := RegistryConsumerGroup{cg: cg, kafkaDecoder: kafkaDecoder}
 
-	return rcg
+	rcg = KafkaRegistryConsumerGroup{cg: cg, kafkaDecoder: kafkaDecoder}
+
+	return rcg, nil
 }
 
-/*
-func EventFromConsumerMessage(msg *sarama.ConsumerMessage) DomainEvent {
-	//RegisteredCodecEvents
-	codec, ok := RegisteredCodecEvents[msg.Metadata.DomainName] // goavro.NewCodec(string(schemaBytes))
-
-	datum, _, err := codec.NativeFromBinary(msg.Value)
-}
-*/
-
-func (rgc RegistryConsumerGroup) ReadMessages() {
+func (rgc KafkaRegistryConsumerGroup) ReadMessages() {
 	// run consumer
 	for {
 		select {
 		case msg := <-rgc.cg.Messages():
 			// messages coming through chanel
 			// only take messages from subscribed topic
-
+			// TODO: Manage topics
 			/*
 				if msg.Topic != topic {
 					continue
 				}
 			*/
+
 			event, err := rgc.kafkaDecoder.Decode(msg.Value)
 
 			fmt.Println("Topic: ", msg.Topic)

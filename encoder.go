@@ -1,63 +1,45 @@
 package avrostry
 
 import (
+	"bytes"
 	"encoding/binary"
-	"errors"
 
-	avro "github.com/stealthly/go-avro"
+	"github.com/linkedin/goavro"
 )
 
-type KafkaAvroDecoder struct {
-	schemaRegistry SchemaRegistryClient
+var magicBytes = []byte{0}
+
+type KafkaAvroEncoder struct {
+	SchemaRegistry SchemaRegistryClient
 }
 
-func NewKafkaAvroDecoder(url string) *KafkaAvroDecoder {
-	return &KafkaAvroDecoder{
-		schemaRegistry: NewCachedSchemaRegistryClient(url),
+func NewKafkaAvroEncoder(url string) *KafkaAvroEncoder {
+
+	return &KafkaAvroEncoder{
+		SchemaRegistry: NewCachedSchemaRegistryClient(url),
 	}
 }
 
-func (this *KafkaAvroDecoder) Decode(bytes []byte) (interface{}, error) {
-	if bytes == nil {
-		return nil, nil
-	} else {
-		if bytes[0] != 0 {
-			return nil, errors.New("Unknown magic byte!")
-		}
-		id := int32(binary.BigEndian.Uint32(bytes[1:]))
-		schema, err := this.schemaRegistry.GetByID(id)
-		if err != nil {
-			return nil, err
-		}
+func (this *KafkaAvroEncoder) Encode(event DomainEvent) ([]byte, error) {
 
-		if schema.Type() == avro.Bytes {
-			return bytes[5:], nil
-		} else {
-			reader := avro.NewGenericDatumReader()
-			reader.SetSchema(schema)
-			value := avro.NewGenericRecord(schema)
-			err := reader.Read(value, avro.NewBinaryDecoder(bytes[5:]))
-
-			return value, err
-		}
+	id, err := this.SchemaRegistry.Register(event.Subject(), event.AvroSchema())
+	if err != nil {
+		return nil, err
 	}
-}
 
-func (this *KafkaAvroDecoder) DecodeSpecific(bytes []byte, value interface{}) error {
-	if bytes == nil {
-		return nil
-	} else {
-		if bytes[0] != 0 {
-			return errors.New("Unknown magic byte!")
-		}
-		id := int32(binary.BigEndian.Uint32(bytes[1:]))
-		schema, err := this.schemaRegistry.GetByID(id)
-		if err != nil {
-			return err
-		}
+	buffer := &bytes.Buffer{}
+	buffer.Write(magicBytes)
+	idSlice := make([]byte, 4)
+	binary.BigEndian.PutUint32(idSlice, uint32(id))
+	buffer.Write(idSlice)
 
-		reader := avro.NewSpecificDatumReader()
-		reader.SetSchema(schema)
-		return reader.Read(value, avro.NewBinaryDecoder(bytes[5:]))
+	// TODO: Cache codecs
+	codec, err := goavro.NewCodec(event.AvroSchema())
+	if err != nil {
+		return nil, err
 	}
+	binary, err := codec.BinaryFromNative(nil, event.ToPayload())
+	buffer.Write(binary)
+
+	return buffer.Bytes(), err
 }

@@ -1,26 +1,10 @@
-/* Licensed to the Apache Software Foundation (ASF) under one or more
-contributor license agreements.  See the NOTICE file distributed with
-this work for additional information regarding copyright ownership.
-The ASF licenses this file to You under the Apache License, Version 2.0
-(the "License"); you may not use this file except in compliance with
-the License.  You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License. */
-
 package avrostry_test
 
 import (
-	"fmt"
+	"encoding/json"
 	"testing"
 
 	"github.com/josgilmo/avrostry"
-	"github.com/stealthly/go-avro"
 )
 
 const (
@@ -28,35 +12,95 @@ const (
 	rawMetricsSchema    = `{"namespace": "ly.stealth.kafka.metrics","type": "record","name": "Timings","fields": [{"name": "id", "type": "long"},{"name": "timings",  "type": {"type":"array", "items": "long"} }]}`
 )
 
-func assert(t *testing.T, e error, i interface{}) {
-
+func assert(t *testing.T, value interface{}, expected interface{}) {
+	if value != expected {
+		t.Errorf("Value %v, expected %v", value, expected)
+	}
 }
-func TestAvroKafkaEncoderDecoder(t *testing.T) {
-	encoder := avrostry.NewKafkaAvroEncoder(schemaRepositoryUrl)
 
-	schema, err := avro.ParseSchema(rawMetricsSchema)
-	fmt.Println(schema)
-	assert(t, err, nil)
+func assertNot(t *testing.T, value interface{}, expected interface{}) {
+	if value == expected {
+		t.Errorf("Value %v, expected %v", value, expected)
+	}
+}
 
-	record := avro.NewGenericRecord(schema)
-	record.Set("id", int64(3))
-	record.Set("timings", []int64{123456, 654321})
+type WordWasRead struct {
+	Word string
+}
 
-	bytes, err := encoder.Encode(record)
-	assert(t, err, nil)
+func (word WordWasRead) AvroSchema() string {
+	return `{
+		"type": "record",
+		"name": "words",
+		"doc:": "Just words",
+		"namespace": "com.avro.kafka.golang",
+		"fields": [
+		{
+			"type": "string",
+			"name": "Word"
+		}
+		]
+	}
+	`
+}
 
-	decoder := avrostry.NewKafkaAvroDecoder(schemaRepositoryUrl)
-	decoded, err := decoder.Decode(bytes)
-	assert(t, err, nil)
+func (word *WordWasRead) FromPayload(m map[string]interface{}) error {
 
-	decodedRecord, ok := decoded.(*avro.GenericRecord)
-	if !ok || decodedRecord == nil {
-		fmt.Println(decodedRecord)
-		t.Errorf("%v", decodedRecord)
+	data, _ := json.Marshal(m)
+	err := json.Unmarshal(data, word)
+
+	return err
+}
+
+func (word WordWasRead) ToPayload() map[string]interface{} {
+	datumIn := map[string]interface{}{
+		"Word": word.Word,
 	}
 
-	// assert(t, ok, true)
+	return datumIn
+}
 
-	// assert(t, decodedRecord.Get("id"), record.Get("id"))
-	// assert(t, decodedRecord.Get("timings"), []interface{}{int64(123456), int64(654321)})
+func (word WordWasRead) Version() int {
+	return 1
+}
+func (word WordWasRead) Subject() string {
+	return "ddd:words:read"
+}
+
+func TestAvroKafkaEncoderDecoder(t *testing.T) {
+	word := WordWasRead{Word: "Palabro"}
+
+	client := avrostry.NewCachedSchemaRegistryClient("http://localhost:8081")
+	idCache := make(map[int32]string)
+	var schemaIdMap map[string]int32
+	schemaIdMap = make(map[string]int32)
+	rawSchema := word.AvroSchema()
+
+	schemaIdMap[rawSchema] = 1
+	client.SchemaCache[word.Subject()] = schemaIdMap
+	client.IdCache = idCache
+	idCache[1] = rawSchema
+
+	encoder := avrostry.NewKafkaAvroEncoder(schemaRepositoryUrl)
+	encoder.SchemaRegistry = client
+
+	bytes, err := encoder.Encode(word)
+	assert(t, err, nil)
+	assertNot(t, bytes, nil)
+
+	decoder := avrostry.NewKafkaAvroDecoder(schemaRepositoryUrl)
+	decoder.SchemaRegistry = client
+	obj, err := decoder.Decode(bytes)
+	if err != nil {
+		t.Errorf("Returned: %v", err)
+	}
+	wordDecoded := &WordWasRead{}
+
+	err = wordDecoded.FromPayload(obj.(map[string]interface{}))
+	if err != nil {
+		t.Errorf("Error %v", err)
+	}
+	if wordDecoded.Word != word.Word {
+		t.Errorf("Wrong word returned: %v", obj)
+	}
 }
