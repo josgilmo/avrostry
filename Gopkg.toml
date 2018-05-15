@@ -30,8 +30,16 @@
   version = "0.1.0"
 
 [[constraint]]
-  name = "gopkg.in/linkedin/goavro.v2"
+  name = "github.com/Shopify/sarama"
+  version = "1.16.0"
+
+[[constraint]]
+  name = "github.com/linkedin/goavro"
   version = "2.3.0"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/wvanbergen/kafka"
 
 [prune]
   go-tests = true

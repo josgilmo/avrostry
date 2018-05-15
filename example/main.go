@@ -62,6 +62,9 @@ func (word *WordWasRead) ToPayload() map[string]interface{} {
 
 	return datumIn
 }
+func (word WordWasRead) AggregateId() interface{} {
+	return "ddd:words:read"
+}
 
 func createProducer() *avrostry.EventRegistryProducer {
 	// create producer

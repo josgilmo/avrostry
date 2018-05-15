@@ -8,20 +8,86 @@
   version = "0.1.0"
 
 [[projects]]
+  name = "github.com/Shopify/sarama"
+  packages = ["."]
+  revision = "f7be6aa2bc7b2e38edf816b08b582782194a1c02"
+  version = "v1.16.0"
+
+[[projects]]
+  name = "github.com/davecgh/go-spew"
+  packages = ["spew"]
+  revision = "346938d642f2ec3594ed81d874461961cd0faa76"
+  version = "v1.1.0"
+
+[[projects]]
+  name = "github.com/eapache/go-resiliency"
+  packages = ["breaker"]
+  revision = "ea41b0fad31007accc7f806884dcdf3da98b79ce"
+  version = "v1.1.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/eapache/go-xerial-snappy"
+  packages = ["."]
+  revision = "bb955e01b9346ac19dc29eb16586c90ded99a98c"
+
+[[projects]]
+  name = "github.com/eapache/queue"
+  packages = ["."]
+  revision = "44cc805cf13205b55f69e14bcb69867d1ae92f98"
+  version = "v1.1.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/golang/snappy"
   packages = ["."]
   revision = "553a641470496b2327abcac10b36396bd98e45c9"
 
 [[projects]]
-  name = "gopkg.in/linkedin/goavro.v2"
+  name = "github.com/linkedin/goavro"
   packages = ["."]
   revision = "fa8f6a30176ce945e115db0afad95ede93725eec"
   version = "v2.3.0"
 
+[[projects]]
+  name = "github.com/pierrec/lz4"
+  packages = ["."]
+  revision = "2fcda4cb7018ce05a25959d2fe08c83e3329f169"
+  version = "v1.1"
+
+[[projects]]
+  name = "github.com/pierrec/xxHash"
+  packages = ["xxHash32"]
+  revision = "f051bb7f1d1aaf1b5a665d74fb6b0217712c69f7"
+  version = "v0.1.1"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/rcrowley/go-metrics"
+  packages = ["."]
+  revision = "e2704e165165ec55d062f5919b4b29494e9fa790"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/samuel/go-zookeeper"
+  packages = ["zk"]
+  revision = "c4fab1ac1bec58281ad0667dc3f0907a9476ac47"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/wvanbergen/kafka"
+  packages = ["consumergroup"]
+  revision = "e2edea948ddfee841ea9a263b32ccca15f7d6c2f"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/wvanbergen/kazoo-go"
+  packages = ["."]
+  revision = "f72d8611297a7cf105da904c04198ad701a60101"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "245c3eb7c2332746b2cf0286d8dfb3119f5183b23e1dd4578b5663f26b1a2391"
+  inputs-digest = "8d7a7265df2218216c73e0a6f86cda20697bfaf2559204ad0b6e1a818d2a1a37"
   solver-name = "gps-cdcl"
   solver-version = 1

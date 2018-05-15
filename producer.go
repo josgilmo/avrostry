@@ -42,34 +42,12 @@ func NewSyncProducer(addrs []string, cfg *ProducerConfig) (*EventRegistryProduce
 	return &EventRegistryProducer{producer: prod, kafkaEncoder: kafkaEncoder}, nil
 }
 
-/*
-func (erp *EventRegistryProducer) RegisterEvent(domainEvent DomainEvent) {
-
-	isRegistered, _, _ := erp.clientSchemaRegistry.IsRegistered(domainEvent.Subject(), domainEvent.AvroSchema())
-	if !isRegistered {
-		erp.clientSchemaRegistry.RegisterNewSchema(domainEvent.Subject(), domainEvent.AvroSchema())
-		RegisteredDomainEvents[domainEvent.Subject()] = domainEvent
-	}
-}
-*/
-
 type MetadataEvent struct {
 	EventName string
 }
 
 func (erp *EventRegistryProducer) Publish(event DomainEvent) error {
 
-	/*
-		_, ok := RegisteredCodecEvents[event.Subject()]
-		if !ok {
-
-			erp.RegisterEvent(event)
-		}
-	*/
-
-	//codec, err := goavro.NewCodec(event.AvroSchema())
-
-	//native, _, err := codec.NativeFromTextual(event.ToBytes())
 	binary, err := erp.kafkaEncoder.Encode(event)
 
 	if err != nil {

@@ -15,7 +15,7 @@ type KafkaAvroDecoder struct {
 // NewKafkaAvroDecoder Create a KafkaAvroDecoder struct
 func NewKafkaAvroDecoder(url string) *KafkaAvroDecoder {
 	return &KafkaAvroDecoder{
-		SchemaRegistry: NewCachedSchemaRegistryClient(url),
+		SchemaRegistry: NewSchemaRegistryManager(url),
 	}
 }
 

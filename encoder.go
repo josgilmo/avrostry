@@ -16,7 +16,7 @@ type KafkaAvroEncoder struct {
 func NewKafkaAvroEncoder(url string) *KafkaAvroEncoder {
 
 	return &KafkaAvroEncoder{
-		SchemaRegistry: NewCachedSchemaRegistryClient(url),
+		SchemaRegistry: NewSchemaRegistryManager(url),
 	}
 }
 

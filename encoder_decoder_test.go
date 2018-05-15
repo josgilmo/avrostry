@@ -67,29 +67,28 @@ func (word WordWasRead) Subject() string {
 	return "ddd:words:read"
 }
 
+func (word WordWasRead) AggregateId() interface{} {
+	return "ddd:words:read"
+}
+
 func TestAvroKafkaEncoderDecoder(t *testing.T) {
 	word := WordWasRead{Word: "Palabro"}
 
-	client := avrostry.NewCachedSchemaRegistryClient("http://localhost:8081")
-	idCache := make(map[int32]string)
-	var schemaIdMap map[string]int32
-	schemaIdMap = make(map[string]int32)
-	rawSchema := word.AvroSchema()
-
-	schemaIdMap[rawSchema] = 1
-	client.SchemaCache[word.Subject()] = schemaIdMap
-	client.IdCache = idCache
-	idCache[1] = rawSchema
+	manager := avrostry.NewSchemaRegistryManager("http://localhost:8081")
+	cache := avrostry.NewCacheSchemaRegistry()
+	cache.SetSchemaById(1, word.AvroSchema())
+	cache.SetBySubjectSquema(word.Subject(), word.AvroSchema(), 1)
+	manager.CacheSchemaRegistry = cache
 
 	encoder := avrostry.NewKafkaAvroEncoder(schemaRepositoryUrl)
-	encoder.SchemaRegistry = client
+	encoder.SchemaRegistry = manager
 
 	bytes, err := encoder.Encode(word)
 	assert(t, err, nil)
 	assertNot(t, bytes, nil)
 
 	decoder := avrostry.NewKafkaAvroDecoder(schemaRepositoryUrl)
-	decoder.SchemaRegistry = client
+	decoder.SchemaRegistry = manager
 	obj, err := decoder.Decode(bytes)
 	if err != nil {
 		t.Errorf("Returned: %v", err)
