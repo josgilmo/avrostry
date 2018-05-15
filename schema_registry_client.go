@@ -18,13 +18,32 @@ const (
 	CONFIG                       = "/config"
 )
 
+// ErrorMessage struct for manage errors.
 type ErrorMessage struct {
-	Error_code int32
-	Message    string
+	ErrorCode int32
+	Message   string
 }
 
 func (err *ErrorMessage) Error() string {
-	return fmt.Sprintf("%s(error code: %d)", err.Message, err.Error_code)
+	return fmt.Sprintf("%s(error code: %d)", err.Message, err.ErrorCode)
+}
+
+// RegisterSchemaResponse ID Schema response
+type RegisterSchemaResponse struct {
+	ID int32
+}
+
+// GetSchemaResponse Schema string response
+type GetSchemaResponse struct {
+	Schema string
+}
+
+// GetSubjectVersionResponse Schema Version Response
+type GetSubjectVersionResponse struct {
+	Subject string
+	Version int32
+	ID      int32
+	Schema  string
 }
 
 func (schemaRegistryManager *SchemaRegistryManager) newDefaultRequest(method string, uri string, reader io.Reader) (*http.Request, error) {
@@ -41,13 +60,13 @@ func (schemaRegistryManager *SchemaRegistryManager) isOK(response *http.Response
 	return response.StatusCode >= 200 && response.StatusCode < 300
 }
 
-func (this *SchemaRegistryManager) handleSuccess(response *http.Response, model interface{}) error {
+func (schemaRegistryManager *SchemaRegistryManager) handleSuccess(response *http.Response, model interface{}) error {
 	responseBytes := make([]byte, response.ContentLength)
 	response.Body.Read(responseBytes)
 	return json.Unmarshal(responseBytes, model)
 }
 
-func (this *SchemaRegistryManager) handleError(response *http.Response) error {
+func (schemaRegistryManager *SchemaRegistryManager) handleError(response *http.Response) error {
 	registryError := &ErrorMessage{}
 	responseBytes := make([]byte, response.ContentLength)
 	response.Body.Read(responseBytes)

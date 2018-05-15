@@ -76,7 +76,7 @@ func TestAvroKafkaEncoderDecoder(t *testing.T) {
 
 	manager := avrostry.NewSchemaRegistryManager("http://localhost:8081")
 	cache := avrostry.NewCacheSchemaRegistry()
-	cache.SetSchemaById(1, word.AvroSchema())
+	cache.SetSchemaByID(1, word.AvroSchema())
 	cache.SetBySubjectSquema(word.Subject(), word.AvroSchema(), 1)
 	manager.CacheSchemaRegistry = cache
 

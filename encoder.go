@@ -9,10 +9,12 @@ import (
 
 var magicBytes = []byte{0}
 
+// KafkaAvroEncoder Avro Messages Encoder
 type KafkaAvroEncoder struct {
 	SchemaRegistry SchemaRegistryClient
 }
 
+// NewKafkaAvroEncoder KafkaAvroEncoder constructor
 func NewKafkaAvroEncoder(url string) *KafkaAvroEncoder {
 
 	return &KafkaAvroEncoder{
@@ -20,9 +22,10 @@ func NewKafkaAvroEncoder(url string) *KafkaAvroEncoder {
 	}
 }
 
-func (this *KafkaAvroEncoder) Encode(event DomainEvent) ([]byte, error) {
+// Encode Given a DomainEvent interface, encode the message, loading the struct to/from Kafka Schema Registry.
+func (encoder *KafkaAvroEncoder) Encode(event DomainEvent) ([]byte, error) {
 
-	id, err := this.SchemaRegistry.Register(event.Subject(), event.AvroSchema())
+	id, err := encoder.SchemaRegistry.Register(event.Subject(), event.AvroSchema())
 	if err != nil {
 		return nil, err
 	}

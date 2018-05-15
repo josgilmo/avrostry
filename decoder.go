@@ -7,7 +7,7 @@ import (
 	"github.com/linkedin/goavro"
 )
 
-// KafkaAvroDecoder Struct that implement the Decode function
+// KafkaAvroDecoder Avro Messages Decoder
 type KafkaAvroDecoder struct {
 	SchemaRegistry SchemaRegistryClient
 }
@@ -19,8 +19,8 @@ func NewKafkaAvroDecoder(url string) *KafkaAvroDecoder {
 	}
 }
 
-//Decode Return the decode message related to it´s Schema
-func (kafkaAvroDecoder *KafkaAvroDecoder) Decode(bytes []byte) (interface{}, error) {
+// Decode Given a DomainEvent interface, decode the message, loading the struct to/from Kafka Schema Registry.
+func (decoder *KafkaAvroDecoder) Decode(bytes []byte) (interface{}, error) {
 	if bytes == nil {
 		return nil, nil
 	}
@@ -28,7 +28,7 @@ func (kafkaAvroDecoder *KafkaAvroDecoder) Decode(bytes []byte) (interface{}, err
 		return nil, errors.New("Unknown magic byte")
 	}
 	id := int32(binary.BigEndian.Uint32(bytes[1:]))
-	schema, err := kafkaAvroDecoder.SchemaRegistry.GetByID(id)
+	schema, err := decoder.SchemaRegistry.GetByID(id)
 	if err != nil {
 		return nil, err
 	}

@@ -68,7 +68,7 @@ func (word WordWasRead) AggregateId() interface{} {
 
 func createProducer() *avrostry.EventRegistryProducer {
 	// create producer
-	producer, err := avrostry.NewSyncProducer([]string{kafkaConn}, &avrostry.ProducerConfig{
+	producer, err := avrostry.NewEventRegistryProducer([]string{kafkaConn}, &avrostry.ProducerConfig{
 		ClientID:      "words-producer",
 		MaxRetries:    5,
 		RequiredAcks:  -1,

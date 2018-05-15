@@ -15,6 +15,7 @@ const (
 	topic         = "words"
 )
 
+// KafkaRegistryConsumerGroup Consumer Kafka tool with decoder.
 type KafkaRegistryConsumerGroup struct {
 	cg           *consumergroup.ConsumerGroup
 	kafkaDecoder *KafkaAvroDecoder
@@ -31,13 +32,11 @@ func NewKafkaStreamReaderRegistry() (KafkaRegistryConsumerGroup, error) {
 	config.Offsets.ProcessingTimeout = 10 * time.Second
 
 	// join to consumer group
-	// TODO: Handle error
 	cg, err := consumergroup.JoinConsumerGroup(cgroup, []string{topic}, []string{zookeeperConn}, config)
 	if err != nil {
 		return rcg, err
 	}
 
-	// TODO: Handle error
 	kafkaDecoder := NewKafkaAvroDecoder("http://127.0.0.1:8081")
 
 	rcg = KafkaRegistryConsumerGroup{cg: cg, kafkaDecoder: kafkaDecoder}
@@ -45,7 +44,8 @@ func NewKafkaStreamReaderRegistry() (KafkaRegistryConsumerGroup, error) {
 	return rcg, nil
 }
 
-func (rgc KafkaRegistryConsumerGroup) ReadMessages() {
+// ReadMessages Read the Messages form Kafka an decode as the json DomainEvent
+func (rgc *KafkaRegistryConsumerGroup) ReadMessages() {
 	// run consumer
 	for {
 		select {

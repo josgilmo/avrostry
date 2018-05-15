@@ -7,19 +7,23 @@ import (
 	"strings"
 )
 
+// SchemaRegistryClient Interface for manage Schema Registry
 type SchemaRegistryClient interface {
 	Register(subject string, schema string /* avro.Schema */) (int32, error)
 	GetByID(id int32) (string /* avro.Schema */, error)
+	// TODO Implements latests schema and version management.
 	// GetLatestSchemaMetadata(subject string) (*SchemaMetadata, error)
 	// GetVersion(subject string, schema avro.Schema) (int32, error)
 }
 
+// SchemaMetadata Metainformation about Schemas
 type SchemaMetadata struct {
-	Id      int32
+	ID      int32
 	Version int32
 	Schema  string
 }
 
+// CompatibilityLevel Schema Registry compatibility level
 type CompatibilityLevel string
 
 const (
@@ -42,42 +46,13 @@ const (
 
 var PREFERRED_RESPONSE_TYPES = []string{SCHEMA_REGISTRY_V1_JSON, SCHEMA_REGISTRY_DEFAULT_JSON, JSON}
 
-type RegisterSchemaResponse struct {
-	Id int32
-}
-
-type GetSchemaResponse struct {
-	Schema string
-}
-
-type GetSubjectVersionResponse struct {
-	Subject string
-	Version int32
-	Id      int32
-	Schema  string
-}
-
+// SchemaRegistryManager Client and cache schema registry
 type SchemaRegistryManager struct {
 	registryURL         string
 	CacheSchemaRegistry *CacheSchemaRegistry
 }
 
-type CachedSchemaRegistryClient struct {
-	registryURL string
-	SchemaCache map[string]map[string]int32
-	IdCache     map[int32]string
-	//versionCache map[string]map[avro.Schema]int32
-}
-
-func NewCachedSchemaRegistryClient(registryURL string) *CachedSchemaRegistryClient {
-	return &CachedSchemaRegistryClient{
-		registryURL: registryURL,
-		SchemaCache: make(map[string]map[string]int32),
-		IdCache:     make(map[int32]string),
-		//versionCache: make(map[string]map[avro.Schema]int32),
-	}
-}
-
+// NewSchemaRegistryManager SchemaRegistryManager Constructor
 func NewSchemaRegistryManager(registryURL string) *SchemaRegistryManager {
 	cache := NewCacheSchemaRegistry()
 	return &SchemaRegistryManager{
@@ -91,25 +66,13 @@ func NewSchemaRegistryManager(registryURL string) *SchemaRegistryManager {
 	}
 }
 
+// Register Set a subject schema in Schema Registry if the is no in cache.
 func (schemaRegistryManager *SchemaRegistryManager) Register(subject string, schema string /* avro.Schema */) (int32, error) {
-	//var schemaIdMap map[string]int32
-	var exists bool
 
-	id, exists := schemaRegistryManager.CacheSchemaRegistry.GetIdBySubjectAndSquema(subject, schema)
+	id, exists := schemaRegistryManager.CacheSchemaRegistry.GetIDBySubjectAndSquema(subject, schema)
 	if exists {
 		return id, nil
 	}
-	/*
-		if schemaIdMap, exists = schemaRegistryManager.SchemaCache[subject]; !exists {
-			schemaIdMap = make(map[string]int32)
-			schemaRegistryManager.SchemaCache[subject] = schemaIdMap
-		}
-
-		var id int32
-		if id, exists = schemaIdMap[schema]; exists {
-			return id, nil
-		}
-	*/
 
 	request, err := schemaRegistryManager.newDefaultRequest("POST",
 		fmt.Sprintf(REGISTER_NEW_SCHEMA, subject),
@@ -125,22 +88,19 @@ func (schemaRegistryManager *SchemaRegistryManager) Register(subject string, sch
 			return 0, err
 		}
 
-		schemaRegistryManager.CacheSchemaRegistry.SetBySubjectSquema(subject, schema, decodedResponse.Id)
-		/*
-			schemaIdMap[schema] = decodedResponse.Id
-			schemaRegistryManager.IdCache[decodedResponse.Id] = schema
-		*/
+		schemaRegistryManager.CacheSchemaRegistry.SetBySubjectSquema(subject, schema, decodedResponse.ID)
 
-		return decodedResponse.Id, err
+		return decodedResponse.ID, err
 	} else {
 		return 0, schemaRegistryManager.handleError(response)
 	}
 }
 
+//GetByID Given an id, retrieve the related Schema from Kafka Schema Registry
 func (schemaRegistryManager *SchemaRegistryManager) GetByID(id int32) (string, error) {
 	var schema string // avro.Schema
 	var exists bool
-	if schema, exists = schemaRegistryManager.CacheSchemaRegistry.IdCache[id]; exists {
+	if schema, exists = schemaRegistryManager.CacheSchemaRegistry.IDCache[id]; exists {
 		return schema, nil
 	}
 
@@ -159,9 +119,8 @@ func (schemaRegistryManager *SchemaRegistryManager) GetByID(id int32) (string, e
 		if schemaRegistryManager.handleSuccess(response, decodedResponse) != nil {
 			return "", err
 		}
-		// schema, err := avro.ParseSchema(decodedResponse.Schema)
-		schemaRegistryManager.CacheSchemaRegistry.SetSchemaById(id, schema)
-		// schemaRegistryManager.IdCache[id] = decodedResponse.Schema //schema.String()
+
+		schemaRegistryManager.CacheSchemaRegistry.SetSchemaByID(id, schema)
 
 		return decodedResponse.Schema, err //return schema.String(), err
 	} else {

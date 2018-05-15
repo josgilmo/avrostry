@@ -1,10 +1,6 @@
 package avrostry
 
-import "github.com/linkedin/goavro"
-
-// TODO: move as member and lock with sync.RLock
-var RegisteredCodecEvents map[string]*goavro.Codec
-
+// DomainEvent Struct for Implement the Domain Event.
 type DomainEvent interface {
 	AvroSchema() string
 	Version() int
