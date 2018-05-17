@@ -57,6 +57,7 @@ func (erp *EventRegistryProducer) Publish(event DomainEvent) error {
 	msg := &sarama.ProducerMessage{
 		// TODO: how we are going to manage the kafka topics?
 		// TODO: Produce the messages with the AgregateID partition.
+		Key:   sarama.StringEncoder(event.AggregateID()),
 		Topic: kafkaTopic,
 		Value: sarama.ByteEncoder(binary),
 	}

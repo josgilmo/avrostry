@@ -74,6 +74,7 @@ func (schemaRegistryManager *SchemaRegistryManager) Register(subject string, sch
 		return id, nil
 	}
 
+	// todo: Create a client custom.
 	request, err := schemaRegistryManager.newDefaultRequest("POST",
 		fmt.Sprintf(REGISTER_NEW_SCHEMA, subject),
 		strings.NewReader(fmt.Sprintf("{\"schema\": %s}", strconv.Quote(schema))))

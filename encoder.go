@@ -34,7 +34,10 @@ func (encoder *KafkaAvroEncoder) Encode(event DomainEvent) ([]byte, error) {
 	buffer.Write(magicBytes)
 	idSlice := make([]byte, 4)
 	binary.BigEndian.PutUint32(idSlice, uint32(id))
-	buffer.Write(idSlice)
+	_, err = buffer.Write(idSlice)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO: Cache codecs
 	codec, err := goavro.NewCodec(event.AvroSchema())
@@ -42,7 +45,10 @@ func (encoder *KafkaAvroEncoder) Encode(event DomainEvent) ([]byte, error) {
 		return nil, err
 	}
 	binary, err := codec.BinaryFromNative(nil, event.ToPayload())
-	buffer.Write(binary)
+	if err != nil {
+		return nil, err
+	}
+	_, err = buffer.Write(binary)
 
 	return buffer.Bytes(), err
 }

@@ -7,6 +7,18 @@ type DomainEvent interface {
 	Subject() string
 	// TODO Create the way to generalize this.
 	//FromPayload(m map[string]interface{}) error
-	ToPayload() map[string]interface{}
+	ToPayload() interface{}
+	// TODO Change to string
 	AggregateID() interface{}
+}
+
+//TODO Split of DomainEvent interface to one for producer and other for consumer (.
+
+type ConsumerEvent interface {
+	Subject() string
+	// TODO Create the way to generalize this.
+	//FromPayload(m map[string]interface{}) error
+	ToPayload() map[string]interface{}
+	// TODO Change to string
+	ID() interface{}
 }

@@ -45,6 +45,7 @@ func NewKafkaStreamReaderRegistry() (KafkaRegistryConsumerGroup, error) {
 }
 
 // ReadMessages Read the Messages form Kafka an decode as the json DomainEvent
+// TODO: Pass handler as parameter.
 func (rgc *KafkaRegistryConsumerGroup) ReadMessages() {
 	// run consumer
 	for {
@@ -60,6 +61,7 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages() {
 			*/
 
 			event, err := rgc.kafkaDecoder.Decode(msg.Value)
+			// TODO: Instance a DomainEvent.
 
 			fmt.Println("Topic: ", msg.Topic)
 			fmt.Println("Value: ", string(msg.Value))

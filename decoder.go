@@ -24,6 +24,7 @@ func (decoder *KafkaAvroDecoder) Decode(bytes []byte) (interface{}, error) {
 	if bytes == nil {
 		return nil, nil
 	}
+	
 	if bytes[0] != 0 {
 		return nil, errors.New("Unknown magic byte")
 	}
