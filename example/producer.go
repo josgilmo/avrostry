@@ -12,19 +12,19 @@ import (
 )
 
 const (
-	kafkaConn  = "localhost:9092"
-	KafkaTopic = "words"
+	kafkaConn = "localhost:9092"
+	//kafkaConn  = "localhost:7092"
+	kafkaTopic = "words"
 )
 
 var client schemaregistry.Client
 
-// WordWasRead Sample event
-type WordWasRead struct {
+type wordWasRead struct {
 	Word string
 }
 
 // AvroSchema for WasReadEvent
-func (word WordWasRead) AvroSchema() string {
+func (word wordWasRead) AvroSchema() string {
 	return `{
 		"type": "record",
 		"name": "words",
@@ -33,21 +33,21 @@ func (word WordWasRead) AvroSchema() string {
 		"fields": [
 		{
 			"type": "string",
-			"name": "word"
+			"name": "Word"
 		}
 		]
 	}
 	`
 }
 
-func (word WordWasRead) Version() int {
+func (word wordWasRead) Version() int {
 	return 1
 }
-func (word WordWasRead) Subject() string {
+func (word wordWasRead) Subject() string {
 	return "ddd:words:read"
 }
 
-func (word *WordWasRead) FromPayload(m map[string]interface{}) error {
+func (word *wordWasRead) FromPayload(m map[string]interface{}) error {
 	// Take simple fields
 	data, _ := json.Marshal(m)
 	err := json.Unmarshal(data, word)
@@ -55,14 +55,14 @@ func (word *WordWasRead) FromPayload(m map[string]interface{}) error {
 	return err
 }
 
-func (word *WordWasRead) ToPayload() map[string]interface{} {
+func (word *wordWasRead) ToPayload() map[string]interface{} {
 	datumIn := map[string]interface{}{
 		"Word": word.Word,
 	}
 
 	return datumIn
 }
-func (word WordWasRead) AggregateId() interface{} {
+func (word *wordWasRead) AggregateID() interface{} {
 	return "ddd:words:read"
 }
 
@@ -86,9 +86,10 @@ func createProducer() *avrostry.EventRegistryProducer {
 }
 
 func main() {
-	word := &WordWasRead{Word: "palabrota"}
+	word := &wordWasRead{Word: "palabrota"}
 
 	erp := createProducer()
 	erp.Publish(word)
 
+	fmt.Println("Finish publishing a msg")
 }

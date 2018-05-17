@@ -8,5 +8,5 @@ type DomainEvent interface {
 	// TODO Create the way to generalize this.
 	//FromPayload(m map[string]interface{}) error
 	ToPayload() map[string]interface{}
-	AggregateId() interface{}
+	AggregateID() interface{}
 }

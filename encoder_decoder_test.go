@@ -5,24 +5,13 @@ import (
 	"testing"
 
 	"github.com/josgilmo/avrostry"
+	"github.com/stretchr/testify/require"
 )
 
 const (
 	schemaRepositoryUrl = "http://localhost:8081"
 	rawMetricsSchema    = `{"namespace": "ly.stealth.kafka.metrics","type": "record","name": "Timings","fields": [{"name": "id", "type": "long"},{"name": "timings",  "type": {"type":"array", "items": "long"} }]}`
 )
-
-func assert(t *testing.T, value interface{}, expected interface{}) {
-	if value != expected {
-		t.Errorf("Value %v, expected %v", value, expected)
-	}
-}
-
-func assertNot(t *testing.T, value interface{}, expected interface{}) {
-	if value == expected {
-		t.Errorf("Value %v, expected %v", value, expected)
-	}
-}
 
 type WordWasRead struct {
 	Word string
@@ -67,7 +56,7 @@ func (word WordWasRead) Subject() string {
 	return "ddd:words:read"
 }
 
-func (word WordWasRead) AggregateId() interface{} {
+func (word WordWasRead) AggregateID() interface{} {
 	return "ddd:words:read"
 }
 
@@ -84,8 +73,8 @@ func TestAvroKafkaEncoderDecoder(t *testing.T) {
 	encoder.SchemaRegistry = manager
 
 	bytes, err := encoder.Encode(word)
-	assert(t, err, nil)
-	assertNot(t, bytes, nil)
+	require.Nil(t, err)
+	require.NotNil(t, bytes)
 
 	decoder := avrostry.NewKafkaAvroDecoder(schemaRepositoryUrl)
 	decoder.SchemaRegistry = manager

@@ -4,18 +4,6 @@ import (
 	"testing"
 )
 
-func assert(t *testing.T, value error, expected interface{}) {
-	if value != expected {
-		t.Errorf("Value was %v, expected %v", value, expected)
-	}
-}
-
-func assertNot(t *testing.T, value interface{}, expected interface{}) {
-	if value == expected {
-		t.Errorf("Value was %v, expected %v", value, expected)
-	}
-}
-
 func TestSchemaRegistryCached(t *testing.T) {
 	/*
 		client := NewSchemaRegistryManager("http://localhost:8081")

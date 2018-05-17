@@ -62,5 +62,6 @@ func (erp *EventRegistryProducer) Publish(event DomainEvent) error {
 	}
 
 	erp.producer.SendMessage(msg)
+
 	return nil
 }
