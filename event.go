@@ -1,24 +1,18 @@
 package avrostry
 
-// DomainEvent Struct for Implement the Domain Event.
+// DomainEvent is the interface every that event
+// we want to publish in Kafka must implement
 type DomainEvent interface {
+	// This event schema according to Avro spec
 	AvroSchema() string
-	Version() int
-	Subject() string
-	// TODO Create the way to generalize this.
-	//FromPayload(m map[string]interface{}) error
-	ToPayload() interface{}
-	// TODO Change to string
-	AggregateID() interface{}
-}
 
-//TODO Split of DomainEvent interface to one for producer and other for consumer (.
-
-type ConsumerEvent interface {
+	// The type name of the event, is the selector
+	// to instantiate a concrete event after decoding
 	Subject() string
-	// TODO Create the way to generalize this.
-	//FromPayload(m map[string]interface{}) error
-	ToPayload() map[string]interface{}
-	// TODO Change to string
-	ID() interface{}
+
+	// Convert to a map for encoding
+	ToStringMap() map[string]interface{}
+
+	// ID of the event, it will be the partition key
+	ID() string
 }

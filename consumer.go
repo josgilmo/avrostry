@@ -1,77 +1,114 @@
 package avrostry
 
 import (
-	"fmt"
+	"context"
 	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/pkg/errors"
 	"github.com/wvanbergen/kafka/consumergroup"
 )
 
-// TODO: create config for this.
-const (
-	zookeeperConn = "localhost:2181"
-	cgroup        = "words_group"
-	topic         = "words"
-)
+type EventHandler func(subject string, event map[string]interface{}) error
+
+func NullEventHandler(string, map[string]interface{}) error {
+	return nil
+}
+
+type ErrorHandler func(err error)
+
+func NullErrorHandler(error) {
+}
+
+type consumerConfig struct {
+	Zookeeper            []string
+	Name                 string
+	Topics               []string
+	Offset               int64
+	ProcessingTimeout    time.Duration
+	SchemaRegistryClient SchemaRegistryClient
+	CacheCodec           *CacheCodec
+	EventHandler         EventHandler
+	ErrorHandler         ErrorHandler
+}
+
+func DefaultKafkaRegistryConsumerGroupCfg() consumerConfig {
+	return consumerConfig{
+		Offset:            sarama.OffsetOldest,
+		ProcessingTimeout: 10 * time.Second,
+		CacheCodec:        NewCacheCodec(),
+		EventHandler:      NullEventHandler,
+		ErrorHandler:      NullErrorHandler,
+	}
+}
 
 // KafkaRegistryConsumerGroup Consumer Kafka tool with decoder.
 type KafkaRegistryConsumerGroup struct {
-	cg           *consumergroup.ConsumerGroup
-	kafkaDecoder *KafkaAvroDecoder
+	cg         *consumergroup.ConsumerGroup
+	codec      *KafkaAvroCodec
+	handler    EventHandler
+	errHandler ErrorHandler
 }
 
 // NewKafkaStreamReaderRegistry Constructor for KafkaRegistryConsumerGroup
-func NewKafkaStreamReaderRegistry() (KafkaRegistryConsumerGroup, error) {
-	var (
-		rcg KafkaRegistryConsumerGroup
-		err error
-	)
+func NewKafkaStreamReaderRegistry(cfg consumerConfig) (*KafkaRegistryConsumerGroup, error) {
 	config := consumergroup.NewConfig()
-	config.Offsets.Initial = sarama.OffsetOldest
-	config.Offsets.ProcessingTimeout = 10 * time.Second
+	config.Offsets.Initial = cfg.Offset
+	config.Offsets.ProcessingTimeout = cfg.ProcessingTimeout
 
 	// join to consumer group
-	cg, err := consumergroup.JoinConsumerGroup(cgroup, []string{topic}, []string{zookeeperConn}, config)
+	cg, err := consumergroup.JoinConsumerGroup(cfg.Name, cfg.Topics, cfg.Zookeeper, config)
 	if err != nil {
-		return rcg, err
+		return nil, err
 	}
-
-	kafkaDecoder := NewKafkaAvroDecoder("http://127.0.0.1:8081")
-
-	rcg = KafkaRegistryConsumerGroup{cg: cg, kafkaDecoder: kafkaDecoder}
-
-	return rcg, nil
+	codec := NewKafkaAvroCodec(cfg.SchemaRegistryClient, cfg.CacheCodec)
+	return &KafkaRegistryConsumerGroup{cg, codec, cfg.EventHandler, cfg.ErrorHandler}, nil
 }
 
-// ReadMessages Read the Messages form Kafka an decode as the json DomainEvent
-// TODO: Pass handler as parameter.
-func (rgc *KafkaRegistryConsumerGroup) ReadMessages() {
-	// run consumer
+// ReadMessages read messages from Kafka, decode them and propagete them
+// to handler, only returns when context is cancelled
+func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 	for {
 		select {
+		case <-ctx.Done():
+			return nil
+
 		case msg := <-rgc.cg.Messages():
-			// messages coming through chanel
-			// only take messages from subscribed topic
-			// TODO: Manage topics
-			/*
-				if msg.Topic != topic {
-					continue
-				}
-			*/
+			if msg.Value == nil {
+				break
+			}
 
-			event, err := rgc.kafkaDecoder.Decode(msg.Value)
-			// TODO: Instance a DomainEvent.
+			var (
+				eventMap map[string]interface{}
+				ok       bool
+			)
 
-			fmt.Println("Topic: ", msg.Topic)
-			fmt.Println("Value: ", string(msg.Value))
-			fmt.Printf("Event %v: ", event)
+			subject, event, err := rgc.codec.Decode(msg.Value)
+			if err != nil {
+				rgc.errHandler(errors.Wrap(err, "could not decode message"))
+				goto commit
+			}
 
-			// commit to zookeeper that message is read
-			// this prevent read message multiple times after restart
+			// fmt.Println("Subject: ", subject)
+			// fmt.Println("Topic: ", msg.Topic)
+
+			eventMap, ok = event.(map[string]interface{})
+			if !ok {
+				rgc.errHandler(errors.Errorf("unexpected message format for subject: %s", subject))
+				goto commit
+			}
+
+			err = rgc.handler(subject, eventMap)
+			if err != nil {
+				break // when handler returns an error we don't commit the message
+			}
+
+		commit:
+			// commit to zookeeper that message
+			// this prevents read message multiple times after restart
 			err = rgc.cg.CommitUpto(msg)
 			if err != nil {
-				fmt.Println("Error commit zookeeper: ", err.Error())
+				rgc.errHandler(errors.Wrap(err, "could not commit message"))
 			}
 		}
 	}
