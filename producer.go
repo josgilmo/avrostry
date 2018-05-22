@@ -7,7 +7,6 @@ import (
 // ProducerConfig Producer configuration
 type producerConfig struct {
 	Addrs         []string
-	Topic         string
 	ClientID      string
 	MaxRetries    int
 	RequiredAcks  int16
@@ -28,7 +27,6 @@ func DefaultProducerConfig() producerConfig {
 
 // KafkaRegistryProducer Struct for Encode and publish messages in Avro format with Schema Registry
 type KafkaRegistryProducer struct {
-	topic    string
 	producer sarama.SyncProducer
 	codec    *KafkaAvroCodec
 }
@@ -45,11 +43,11 @@ func NewKafkaRegistryProducer(cfg producerConfig) (*KafkaRegistryProducer, error
 		return nil, err
 	}
 	codec := NewKafkaAvroCodec(cfg.SchemaRegistryClient, cfg.CacheCodec)
-	return &KafkaRegistryProducer{cfg.Topic, producer, codec}, nil
+	return &KafkaRegistryProducer{producer, codec}, nil
 }
 
 // Publish encode to a Avro format and publish a DomainEvent to Kafka
-func (erp *KafkaRegistryProducer) Publish(event DomainEvent) error {
+func (erp *KafkaRegistryProducer) Publish(topic string, event DomainEvent) error {
 	binary, err := erp.codec.Encode(event)
 	if err != nil {
 		return err
@@ -57,7 +55,7 @@ func (erp *KafkaRegistryProducer) Publish(event DomainEvent) error {
 
 	msg := &sarama.ProducerMessage{
 		Key:   sarama.StringEncoder(event.ID()),
-		Topic: erp.topic,
+		Topic: topic,
 		Value: sarama.ByteEncoder(binary),
 	}
 

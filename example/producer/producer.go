@@ -17,7 +17,6 @@ import (
 func main() {
 	cfg := avrostry.DefaultProducerConfig()
 	cfg.Addrs = []string{KafkaAddr}
-	cfg.Topic = KafkaTopic
 	cfg.ClientID = ClientID
 	cfg.SchemaRegistryClient = avrostry.NewSchemaRegistryManager(
 		SchemaRegistryURL,
@@ -45,7 +44,7 @@ func main() {
 		Status: Hourly,
 	}
 
-	err = producer.Publish(&employee)
+	err = producer.Publish(KafkaTopic, &employee)
 	if err != nil {
 		panic(err)
 	}
