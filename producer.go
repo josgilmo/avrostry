@@ -1,68 +1,67 @@
 package avrostry
 
 import (
-	"fmt"
-
 	"github.com/Shopify/sarama"
 )
 
-const (
-	// TODO: Create an object for manage the Kafka configuration
-	kafkaConn  = "localhost:9092"
-	kafkaTopic = "words"
-)
-
-//ProducerConfig Producer configuration
-type ProducerConfig struct {
+// ProducerConfig Producer configuration
+type producerConfig struct {
+	Addrs         []string
+	Topic         string
 	ClientID      string
 	MaxRetries    int
 	RequiredAcks  int16
 	ReturnSuccess bool
+	//
+	SchemaRegistryClient SchemaRegistryClient
+	CacheCodec           *CacheCodec
 }
 
-// EventRegistryProducer Struct for Encode and prodoce messages in Avro format with Schema Registry
-type EventRegistryProducer struct {
-	producer     sarama.SyncProducer
-	kafkaEncoder *KafkaAvroEncoder
+func DefaultProducerConfig() producerConfig {
+	return producerConfig{
+		MaxRetries: 5,
+		RequiredAcks: -1,
+		ReturnSuccess: true,
+		CacheCodec: NewCacheCodec(),
+	}
 }
 
-// NewEventRegistryProducer EventRegistryProducer constructor
-func NewEventRegistryProducer(addrs []string, cfg *ProducerConfig) (*EventRegistryProducer, error) {
+// KafkaRegistryProducer Struct for Encode and publish messages in Avro format with Schema Registry
+type KafkaRegistryProducer struct {
+	topic    string
+	producer sarama.SyncProducer
+	codec    *KafkaAvroCodec
+}
+
+func NewKafkaRegistryProducer(cfg producerConfig) (*KafkaRegistryProducer, error) {
 	config := sarama.NewConfig()
 	config.ClientID = cfg.ClientID
 	config.Producer.Retry.Max = cfg.MaxRetries
 	config.Producer.RequiredAcks = sarama.RequiredAcks(cfg.RequiredAcks)
 	config.Producer.Return.Successes = cfg.ReturnSuccess
 
-	prod, err := sarama.NewSyncProducer(addrs, config)
+	producer, err := sarama.NewSyncProducer(cfg.Addrs, config)
 	if err != nil {
 		return nil, err
 	}
-
-	//TODO Set the Kafka Schema Registry from configuration
-	kafkaEncoder := NewKafkaAvroEncoder("http://127.0.0.1:8081")
-	return &EventRegistryProducer{producer: prod, kafkaEncoder: kafkaEncoder}, nil
+	codec := NewKafkaAvroCodec(cfg.SchemaRegistryClient, cfg.CacheCodec)
+	return &KafkaRegistryProducer{cfg.Topic, producer, codec}, nil
 }
 
-// Publish Encode to a Avro format and publish Domain Events to Kafka
-func (erp *EventRegistryProducer) Publish(event DomainEvent) error {
-
-	binary, err := erp.kafkaEncoder.Encode(event)
-
+// Publish encode to a Avro format and publish a DomainEvent to Kafka
+func (erp *KafkaRegistryProducer) Publish(event DomainEvent) error {
+	binary, err := erp.codec.Encode(event)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
 	msg := &sarama.ProducerMessage{
-		// TODO: how we are going to manage the kafka topics?
-		// TODO: Produce the messages with the AgregateID partition.
-		Key:   sarama.StringEncoder(event.AggregateID()),
-		Topic: kafkaTopic,
+		Key:   sarama.StringEncoder(event.ID()),
+		Topic: erp.topic,
 		Value: sarama.ByteEncoder(binary),
 	}
 
-	erp.producer.SendMessage(msg)
+	_ /*partition*/, _ /*offset*/, err = erp.producer.SendMessage(msg)
 
-	return nil
+	return err
 }

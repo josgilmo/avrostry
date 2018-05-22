@@ -30,7 +30,7 @@ ifeq (, $(shell which dep))
 $(error "Cannot find dep tool, install and make it available in your PATH")
 endif
 	@echo ">>> Ensuring dependencies..."
-	@dep ensure
+	@dep ensure -v
 
 build:
 	@echo ">>> Building app..."
@@ -39,7 +39,7 @@ build:
 
 test:
 	@echo ">>> Running tests..."
-	go test -v ./...
+	go test -count=1 -v ./...
 	@echo
 
 coverage:
@@ -47,6 +47,6 @@ coverage:
 
 clean:
 	@echo ">>> Cleaning..."
-	$(RM) -r $(GOPATH)/pkg	
+	go clean -i -r -cache -testcache
 	@echo
 

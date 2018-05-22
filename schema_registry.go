@@ -1,7 +1,10 @@
 package avrostry
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,11 +12,8 @@ import (
 
 // SchemaRegistryClient Interface for manage Schema Registry
 type SchemaRegistryClient interface {
-	Register(subject string, schema string /* avro.Schema */) (int32, error)
-	GetByID(id int32) (string /* avro.Schema */, error)
-	// TODO Implements latests schema and version management.
-	// GetLatestSchemaMetadata(subject string) (*SchemaMetadata, error)
-	// GetVersion(subject string, schema avro.Schema) (int32, error)
+	Register(subject, schema string) (id int32, err error)
+	GetByID(id int32) (schema string, err error)
 }
 
 // SchemaMetadata Metainformation about Schemas
@@ -34,155 +34,146 @@ const (
 )
 
 const (
-	SCHEMA_REGISTRY_V1_JSON               = "application/vnd.schemaregistry.v1+json"
-	SCHEMA_REGISTRY_V1_JSON_WEIGHTED      = "application/vnd.schemaregistry.v1+json"
-	SCHEMA_REGISTRY_MOST_SPECIFIC_DEFAULT = "application/vnd.schemaregistry.v1+json"
-	SCHEMA_REGISTRY_DEFAULT_JSON          = "application/vnd.schemaregistry+json"
-	SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED = "application/vnd.schemaregistry+json qs=0.9"
-	JSON                                  = "application/json"
-	JSON_WEIGHTED                         = "application/json qs=0.5"
-	GENERIC_REQUEST                       = "application/octet-stream"
+	GetSchemaByID             = "/schemas/ids/%d"
+	GetSubjects               = "/subjects"
+	GetSubjectVersions        = "/subjects/%s/versions"
+	GetSpecificSubjectVersion = "/subjects/%s/versions/%s"
+	RegisterNewSchema         = "/subjects/%s/versions"
+	CheckIsRegistered         = "/subjects/%s"
+	TestCompatibility         = "/compatibility/subjects/%s/versions/%s"
+	Config                    = "/config"
 )
 
-var PREFERRED_RESPONSE_TYPES = []string{SCHEMA_REGISTRY_V1_JSON, SCHEMA_REGISTRY_DEFAULT_JSON, JSON}
+type ErrorMessage struct {
+	Code    int32  `json:"error_code"`
+	Message string `json:"message"`
+}
+
+func (err *ErrorMessage) Error() string {
+	return fmt.Sprintf("%d: %s ", err.Code, err.Message)
+}
+
+// RegisterSchemaResponse ID Schema response
+type RegisterSchemaResponse struct {
+	ID int32 `json:"id"`
+}
+
+// GetSchemaResponse Schema string response
+type GetSchemaResponse struct {
+	Schema string `json:"schema"`
+}
+
+type HttpDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
 
 // SchemaRegistryManager Client and cache schema registry
 type SchemaRegistryManager struct {
-	registryURL         string
-	CacheSchemaRegistry *CacheSchemaRegistry
+	registryURL string
+	cache       *CacheSchemaRegistry
+	httpDoer    HttpDoer
 }
 
 // NewSchemaRegistryManager SchemaRegistryManager Constructor
-func NewSchemaRegistryManager(registryURL string) *SchemaRegistryManager {
-	cache := NewCacheSchemaRegistry()
+func NewSchemaRegistryManager(registryURL string, cache *CacheSchemaRegistry, httpDoer HttpDoer) *SchemaRegistryManager {
 	return &SchemaRegistryManager{
-		registryURL:         registryURL,
-		CacheSchemaRegistry: cache,
-		/*
-			SchemaCache: make(map[string]map[string]int32),
-			IdCache:     make(map[int32]string),
-		*/
-		//versionCache: make(map[string]map[avro.Schema]int32),
+		registryURL: strings.TrimRight(registryURL, "/"),
+		cache:       cache,
+		httpDoer:    httpDoer,
 	}
 }
 
-// Register Set a subject schema in Schema Registry if the is no in cache.
-func (schemaRegistryManager *SchemaRegistryManager) Register(subject string, schema string /* avro.Schema */) (int32, error) {
-
-	id, exists := schemaRegistryManager.CacheSchemaRegistry.GetIDBySubjectAndSquema(subject, schema)
+// Register set a subject schema in Schema Registry if there is not in cache.
+func (srm *SchemaRegistryManager) Register(subject string, schema string) (int32, error) {
+	id, exists := srm.cache.GetIDBySubjectAndSquema(subject, schema)
 	if exists {
 		return id, nil
 	}
 
-	// todo: Create a client custom.
-	request, err := schemaRegistryManager.newDefaultRequest("POST",
-		fmt.Sprintf(REGISTER_NEW_SCHEMA, subject),
-		strings.NewReader(fmt.Sprintf("{\"schema\": %s}", strconv.Quote(schema))))
-	response, err := http.DefaultClient.Do(request)
+	request, err := srm.newDefaultRequest("POST",
+		fmt.Sprintf(RegisterNewSchema, subject),
+		strings.NewReader(fmt.Sprintf(`{"schema": %s}`, strconv.Quote(schema))))
+
+	response, err := srm.httpDoer.Do(request)
 	if err != nil {
 		return 0, err
 	}
 
-	if schemaRegistryManager.isOK(response) {
-		decodedResponse := &RegisterSchemaResponse{}
-		if schemaRegistryManager.handleSuccess(response, decodedResponse) != nil {
-			return 0, err
-		}
+	defer response.Body.Close()
 
-		schemaRegistryManager.CacheSchemaRegistry.SetBySubjectSquema(subject, schema, decodedResponse.ID)
-
-		return decodedResponse.ID, err
-	} else {
-		return 0, schemaRegistryManager.handleError(response)
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return 0, err
 	}
+
+	if !isOK(response.StatusCode) {
+		return 0, newError(body)
+	}
+
+	var decodedResponse RegisterSchemaResponse
+	err = json.Unmarshal(body, &decodedResponse)
+	if err != nil {
+		return 0, err
+	}
+	srm.cache.SetBySubjectSquema(subject, schema, decodedResponse.ID)
+	return decodedResponse.ID, err
 }
 
-//GetByID Given an id, retrieve the related Schema from Kafka Schema Registry
-func (schemaRegistryManager *SchemaRegistryManager) GetByID(id int32) (string, error) {
-	var schema string // avro.Schema
-	var exists bool
-	if schema, exists = schemaRegistryManager.CacheSchemaRegistry.IDCache[id]; exists {
+// GetByID given an id, retrieve the related Schema from Kafka Schema Registry
+func (srm *SchemaRegistryManager) GetByID(id int32) (string, error) {
+	schema, exists := srm.cache.GetByID(id)
+	if exists {
 		return schema, nil
 	}
 
-	request, err := schemaRegistryManager.newDefaultRequest("GET", fmt.Sprintf(GET_SCHEMA_BY_ID, id), nil)
+	request, err := srm.newDefaultRequest("GET", fmt.Sprintf(GetSchemaByID, id), nil)
 	if err != nil {
 		return "", err
 	}
 
-	response, err := http.DefaultClient.Do(request)
+	response, err := srm.httpDoer.Do(request)
 	if err != nil {
 		return "", err
 	}
 
-	if schemaRegistryManager.isOK(response) {
-		decodedResponse := &GetSchemaResponse{}
-		if schemaRegistryManager.handleSuccess(response, decodedResponse) != nil {
-			return "", err
-		}
+	defer response.Body.Close()
 
-		schemaRegistryManager.CacheSchemaRegistry.SetSchemaByID(id, schema)
-
-		return decodedResponse.Schema, err //return schema.String(), err
-	} else {
-		return "", schemaRegistryManager.handleError(response)
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return "", err
 	}
+
+	if !isOK(response.StatusCode) {
+		return "", newError(body)
+	}
+
+	var decodedResponse GetSchemaResponse
+	err = json.Unmarshal(body, &decodedResponse)
+	if err != nil {
+		return "", err
+	}
+	srm.cache.SetSchemaByID(id, decodedResponse.Schema)
+	return decodedResponse.Schema, err
 }
 
-/*
-func (schemaRegistryManager *CachedSchemaRegistryClient) GetLatestSchemaMetadata(subject string) (*SchemaMetadata, error) {
-	request, err := schemaRegistryManager.newDefaultRequest("GET", fmt.Sprintf(GET_SPECIFIC_SUBJECT_VERSION, subject, "latest"), nil)
+func (srm *SchemaRegistryManager) newDefaultRequest(method string, uri string, reader io.Reader) (*http.Request, error) {
+	request, err := http.NewRequest(method, srm.registryURL+uri, reader)
 	if err != nil {
 		return nil, err
 	}
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return nil, err
-	}
-
-	if schemaRegistryManager.isOK(response) {
-		decodedResponse := &GetSubjectVersionResponse{}
-		if schemaRegistryManager.handleSuccess(response, decodedResponse) != nil {
-			return nil, err
-		}
-
-		return &SchemaMetadata{decodedResponse.Id, decodedResponse.Version, decodedResponse.Schema}, err
-	} else {
-		return nil, schemaRegistryManager.handleError(response)
-	}
+	request.Header.Set("Content-Type", "application/vnd.schemaregistry.v1+json")
+	return request, nil
 }
 
-func (schemaRegistryManager *CachedSchemaRegistryClient) GetVersion(subject string, schema avro.Schema) (int32, error) {
-	var schemaVersionMap map[avro.Schema]int32
-	var exists bool
-	if schemaVersionMap, exists = schemaRegistryManager.versionCache[subject]; !exists {
-		schemaVersionMap = make(map[avro.Schema]int32)
-		schemaRegistryManager.versionCache[subject] = schemaVersionMap
-	}
-
-	var version int32
-	if version, exists = schemaVersionMap[schema]; exists {
-		return version, nil
-	}
-
-	request, err := schemaRegistryManager.newDefaultRequest("POST",
-		fmt.Sprintf(CHECK_IS_REGISTERED, subject),
-		strings.NewReader(fmt.Sprintf("{\"schema\": %s}", strconv.Quote(schema.String()))))
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return 0, err
-	}
-
-	if schemaRegistryManager.isOK(response) {
-		decodedResponse := &GetSubjectVersionResponse{}
-		if schemaRegistryManager.handleSuccess(response, decodedResponse) != nil {
-			return 0, err
-		}
-		schemaVersionMap[schema] = decodedResponse.Version
-
-		return decodedResponse.Version, err
-	} else {
-		return 0, schemaRegistryManager.handleError(response)
-	}
+func isOK(statusCode int) bool {
+	return statusCode >= 200 && statusCode < 300
 }
-*/
+
+func newError(respBody []byte) error {
+	var registryError ErrorMessage
+	err := json.Unmarshal(respBody, &registryError)
+	if err != nil {
+		return err
+	}
+	return &registryError
+}
