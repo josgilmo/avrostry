@@ -22,5 +22,10 @@ jobs:
       - checkout
 
       # specify any bash command here prefixed with `run: `
-      - go get github.com/Shopify/sarama github.com/linkedin/goavro github.com/pkg/errors github.com/wvanbergen/kafka/consumergroup github.com/davecgh/go-spew/spew golang.org/x/sync/errgroup
+      - go get github.com/Shopify/sarama 
+      - go get github.com/linkedin/goavro 
+      - go get github.com/pkg/errors 
+      - go get github.com/wvanbergen/kafka/consumergroup 
+      - go get github.com/davecgh/go-spew/spew 
+      - go get golang.org/x/sync/errgroup
       - run: make test
