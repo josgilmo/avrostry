@@ -28,4 +28,5 @@ jobs:
       - run: go get -u github.com/wvanbergen/kafka/consumergroup 
       - run: go get -u github.com/davecgh/go-spew/spew 
       - run: go get -u golang.org/x/sync/errgroup
+      - run: go get -u github.com/stretchr/testify/require
       - run: make test
