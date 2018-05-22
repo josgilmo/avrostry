@@ -69,9 +69,12 @@ func NewKafkaStreamReaderRegistry(cfg consumerConfig) (*KafkaRegistryConsumerGro
 // to handler, only returns when context is cancelled
 func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 	for {
-		select {
+		select {			
 		case <-ctx.Done():
 			return nil
+
+		case err := <-rgc.cg.Errors():
+			rgc.errHandler(errors.Wrap(err, "received error from kafka"))
 
 		case msg := <-rgc.cg.Messages():
 			if msg.Value == nil {
@@ -88,9 +91,6 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 				rgc.errHandler(errors.Wrap(err, "could not decode message"))
 				goto commit
 			}
-
-			// fmt.Println("Subject: ", subject)
-			// fmt.Println("Topic: ", msg.Topic)
 
 			eventMap, ok = event.(map[string]interface{})
 			if !ok {
