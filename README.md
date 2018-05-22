@@ -14,3 +14,6 @@ your `$GOBIN` path.
 ### Launch Zookeeper, Kafka, Schema Registry and Lenses 
 
 Register here https://www.landoop.com/downloads/lenses/ to obtain a developer docker image 
+
+
+[![CircleCI](https://circleci.com/gh/josgilmo/avrostry.svg?style=svg)](https://circleci.com/gh/josgilmo/avrostry)
