@@ -9,9 +9,9 @@ import (
 	"github.com/wvanbergen/kafka/consumergroup"
 )
 
-type EventHandler func(subject string, event map[string]interface{}) error
+type EventHandler func(subject string, timestamp time.Time, event map[string]interface{}) error
 
-func NullEventHandler(string, map[string]interface{}) error {
+func NullEventHandler(string, time.Time, map[string]interface{}) error {
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 				goto commit
 			}
 
-			err = rgc.handler(subject, eventMap)
+			err = rgc.handler(subject, msg.Timestamp, eventMap)
 			if err != nil {
 				break // when handler returns an error we don't commit the message
 			}
