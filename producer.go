@@ -47,7 +47,7 @@ func NewKafkaRegistryProducer(cfg producerConfig) (*KafkaRegistryProducer, error
 }
 
 // Publish encode to a Avro format and publish a DomainEvent to Kafka
-func (erp *KafkaRegistryProducer) Publish(topic string, event DomainEvent) error {
+func (erp *KafkaRegistryProducer) Publish(event DomainEvent) (partition int32, offset int64, err error) {
 	binary, err := erp.codec.Encode(event)
 	if err != nil {
 		return err
@@ -59,7 +59,5 @@ func (erp *KafkaRegistryProducer) Publish(topic string, event DomainEvent) error
 		Value: sarama.ByteEncoder(binary),
 	}
 
-	_ /*partition*/, _ /*offset*/, err = erp.producer.SendMessage(msg)
-
-	return err
+	return erp.producer.SendMessage(msg)
 }
