@@ -21,13 +21,13 @@ func ErrorHandler(err error) {
 	fmt.Println(err)
 }
 
-func EventHandler(subject string, event map[string]interface{}) error {
+func EventHandler(subject string, timestamp time.Time, event map[string]interface{}) error {
 	if subject != (Employee{}).Subject() {
 		return errors.New("unknown subject")
 	}
 	employee := StringMapToEmployee(event)
 	spew.Dump(*employee)
-	fmt.Println("Consumed Employee!!")
+	fmt.Printf("Consumed Employee on %s!!\n", timestamp)
 
 	return nil
 }

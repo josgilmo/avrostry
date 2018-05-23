@@ -44,12 +44,12 @@ func main() {
 		Status: Hourly,
 	}
 
-	err = producer.Publish(KafkaTopic, &employee)
+	partition, offset, err := producer.Publish(KafkaTopic, &employee)
 	if err != nil {
 		panic(err)
 	}
 
 	spew.Dump(employee)
 
-	fmt.Println("Published employee!!")
+	fmt.Printf("Published employee partition: %d, offset: %d\n", partition, offset)
 }
