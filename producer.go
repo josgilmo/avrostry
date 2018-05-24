@@ -9,8 +9,10 @@ type producerConfig struct {
 	Addrs         []string
 	ClientID      string
 	MaxRetries    int
-	RequiredAcks  int16
+	RequiredAcks  sarama.RequiredAcks
 	ReturnSuccess bool
+	Compression   sarama.CompressionCodec
+	Version       sarama.KafkaVersion
 	//
 	SchemaRegistryClient SchemaRegistryClient
 	CacheCodec           *CacheCodec
@@ -18,10 +20,12 @@ type producerConfig struct {
 
 func DefaultProducerConfig() producerConfig {
 	return producerConfig{
-		MaxRetries: 5,
-		RequiredAcks: -1,
+		MaxRetries:    5,
+		RequiredAcks:  sarama.WaitForLocal,
 		ReturnSuccess: true,
-		CacheCodec: NewCacheCodec(),
+		Compression:   sarama.CompressionSnappy,
+		Version:       sarama.V0_10_0_0,
+		CacheCodec:    NewCacheCodec(),
 	}
 }
 
@@ -35,8 +39,10 @@ func NewKafkaRegistryProducer(cfg producerConfig) (*KafkaRegistryProducer, error
 	config := sarama.NewConfig()
 	config.ClientID = cfg.ClientID
 	config.Producer.Retry.Max = cfg.MaxRetries
-	config.Producer.RequiredAcks = sarama.RequiredAcks(cfg.RequiredAcks)
+	config.Producer.RequiredAcks = cfg.RequiredAcks
 	config.Producer.Return.Successes = cfg.ReturnSuccess
+	config.Producer.Compression = sarama.CompressionSnappy
+	config.Version = cfg.Version
 
 	producer, err := sarama.NewSyncProducer(cfg.Addrs, config)
 	if err != nil {
