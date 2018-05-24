@@ -25,7 +25,7 @@ func NullEventHandler(ConsumerMessage) error {
 	return nil
 }
 
-type ErrorHandler func(err error)
+type ErrorHandler func(error)
 
 func NullErrorHandler(error) {
 }
