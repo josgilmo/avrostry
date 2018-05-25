@@ -58,7 +58,7 @@ func main() {
 		panic(err)
 	}
 
-	period := 3600 * time.Second
+	period := 60 * time.Second
 	// Run for a period
 	ctx, cancel := context.WithTimeout(context.Background(), period)
 	defer cancel()
