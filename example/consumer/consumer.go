@@ -21,7 +21,7 @@ func ErrorHandler(err error) {
 	fmt.Println(err)
 }
 
-func EventHandler(msg avrostry.ConsumerMessage) error {
+func EventHandler(msg *avrostry.ConsumerMessage) error {
 	if msg.Subject != (Employee{}).Subject() {
 		return errors.New("unknown subject")
 	}
@@ -58,7 +58,7 @@ func main() {
 		panic(err)
 	}
 
-	period := 60 * time.Second
+	period := 3600 * time.Second
 	// Run for a period
 	ctx, cancel := context.WithTimeout(context.Background(), period)
 	defer cancel()
