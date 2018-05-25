@@ -21,13 +21,19 @@ func ErrorHandler(err error) {
 	fmt.Println(err)
 }
 
-func EventHandler(subject string, timestamp time.Time, event map[string]interface{}) error {
-	if subject != (Employee{}).Subject() {
+func EventHandler(msg avrostry.ConsumerMessage) error {
+	if msg.Subject != (Employee{}).Subject() {
 		return errors.New("unknown subject")
 	}
-	employee := StringMapToEmployee(event)
+	employee := StringMapToEmployee(msg.Event)
 	spew.Dump(*employee)
-	fmt.Printf("Consumed Employee on %s!!\n", timestamp)
+	fmt.Printf("Consumed event:\n")
+	fmt.Printf("\tKey: %s\n", string(msg.Key))
+	fmt.Printf("\tTopic: %s\n", msg.Topic)
+	fmt.Printf("\tPartition: %d\n", msg.Partition)
+	fmt.Printf("\tOffset: %d\n", msg.Offset)
+	fmt.Printf("\tSubject: %s\n", msg.Subject)
+	fmt.Printf("\tTimestamp: %s\n", msg.Timestamp)
 
 	return nil
 }
@@ -52,7 +58,7 @@ func main() {
 		panic(err)
 	}
 
-	period := 30 * time.Second
+	period := 60 * time.Second
 	// Run for a period
 	ctx, cancel := context.WithTimeout(context.Background(), period)
 	defer cancel()

@@ -9,13 +9,23 @@ import (
 	"github.com/wvanbergen/kafka/consumergroup"
 )
 
-type EventHandler func(subject string, timestamp time.Time, event map[string]interface{}) error
+type ConsumerMessage struct {
+	Key       []byte
+	Topic     string
+	Partition int32
+	Offset    int64
+	Subject   string
+	Timestamp time.Time
+	Event     map[string]interface{}
+}
 
-func NullEventHandler(string, time.Time, map[string]interface{}) error {
+type EventHandler func(ConsumerMessage) error
+
+func NullEventHandler(ConsumerMessage) error {
 	return nil
 }
 
-type ErrorHandler func(err error)
+type ErrorHandler func(error)
 
 func NullErrorHandler(error) {
 }
@@ -25,6 +35,7 @@ type consumerConfig struct {
 	Name                 string
 	Topics               []string
 	Offset               int64
+	Version              sarama.KafkaVersion
 	ProcessingTimeout    time.Duration
 	SchemaRegistryClient SchemaRegistryClient
 	CacheCodec           *CacheCodec
@@ -35,6 +46,7 @@ type consumerConfig struct {
 func DefaultKafkaRegistryConsumerGroupCfg() consumerConfig {
 	return consumerConfig{
 		Offset:            sarama.OffsetOldest,
+		Version:           sarama.V0_10_0_0,
 		ProcessingTimeout: 10 * time.Second,
 		CacheCodec:        NewCacheCodec(),
 		EventHandler:      NullEventHandler,
@@ -53,6 +65,7 @@ type KafkaRegistryConsumerGroup struct {
 // NewKafkaStreamReaderRegistry Constructor for KafkaRegistryConsumerGroup
 func NewKafkaStreamReaderRegistry(cfg consumerConfig) (*KafkaRegistryConsumerGroup, error) {
 	config := consumergroup.NewConfig()
+	config.Config.Version = cfg.Version
 	config.Offsets.Initial = cfg.Offset
 	config.Offsets.ProcessingTimeout = cfg.ProcessingTimeout
 
@@ -69,7 +82,7 @@ func NewKafkaStreamReaderRegistry(cfg consumerConfig) (*KafkaRegistryConsumerGro
 // to handler, only returns when context is cancelled
 func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 	for {
-		select {			
+		select {
 		case <-ctx.Done():
 			return nil
 
@@ -98,7 +111,15 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 				goto commit
 			}
 
-			err = rgc.handler(subject, msg.Timestamp, eventMap)
+			err = rgc.handler(ConsumerMessage{
+				Key:       msg.Key,
+				Topic:     msg.Topic,
+				Partition: msg.Partition,
+				Offset:    msg.Offset,
+				Subject:   subject,
+				Timestamp: msg.Timestamp,
+				Event:     eventMap,
+			})
 			if err != nil {
 				break // when handler returns an error we don't commit the message
 			}
