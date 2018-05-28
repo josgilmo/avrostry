@@ -19,9 +19,9 @@ type ConsumerMessage struct {
 	Event     map[string]interface{}
 }
 
-type EventHandler func(ConsumerMessage) error
+type EventHandler func(*ConsumerMessage) error
 
-func NullEventHandler(ConsumerMessage) error {
+func NullEventHandler(*ConsumerMessage) error {
 	return nil
 }
 
@@ -111,7 +111,7 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 				goto commit
 			}
 
-			err = rgc.handler(ConsumerMessage{
+			err = rgc.handler(&ConsumerMessage{
 				Key:       msg.Key,
 				Topic:     msg.Topic,
 				Partition: msg.Partition,

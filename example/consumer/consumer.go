@@ -21,7 +21,7 @@ func ErrorHandler(err error) {
 	fmt.Println(err)
 }
 
-func EventHandler(msg avrostry.ConsumerMessage) error {
+func EventHandler(msg *avrostry.ConsumerMessage) error {
 	if msg.Subject != (Employee{}).Subject() {
 		return errors.New("unknown subject")
 	}
