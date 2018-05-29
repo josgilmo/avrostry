@@ -41,6 +41,9 @@ type consumerConfig struct {
 	CacheCodec           *CacheCodec
 	EventHandler         EventHandler
 	ErrorHandler         ErrorHandler
+	// TODO: replace this by an exponential backoff such as:
+	//   https://github.com/cenkalti/backoff
+	ClientRetryPeriod time.Duration
 }
 
 func DefaultKafkaRegistryConsumerGroupCfg() consumerConfig {
@@ -51,11 +54,13 @@ func DefaultKafkaRegistryConsumerGroupCfg() consumerConfig {
 		CacheCodec:        NewCacheCodec(),
 		EventHandler:      NullEventHandler,
 		ErrorHandler:      NullErrorHandler,
+		ClientRetryPeriod: 5 * time.Second,
 	}
 }
 
 // KafkaRegistryConsumerGroup Consumer Kafka tool with decoder.
 type KafkaRegistryConsumerGroup struct {
+	cfg        consumerConfig
 	cg         *consumergroup.ConsumerGroup
 	codec      *KafkaAvroCodec
 	handler    EventHandler
@@ -68,6 +73,7 @@ func NewKafkaStreamReaderRegistry(cfg consumerConfig) (*KafkaRegistryConsumerGro
 	config.Config.Version = cfg.Version
 	config.Offsets.Initial = cfg.Offset
 	config.Offsets.ProcessingTimeout = cfg.ProcessingTimeout
+	config.Consumer.Return.Errors = true
 
 	// join to consumer group
 	cg, err := consumergroup.JoinConsumerGroup(cfg.Name, cfg.Topics, cfg.Zookeeper, config)
@@ -75,7 +81,7 @@ func NewKafkaStreamReaderRegistry(cfg consumerConfig) (*KafkaRegistryConsumerGro
 		return nil, err
 	}
 	codec := NewKafkaAvroCodec(cfg.SchemaRegistryClient, cfg.CacheCodec)
-	return &KafkaRegistryConsumerGroup{cg, codec, cfg.EventHandler, cfg.ErrorHandler}, nil
+	return &KafkaRegistryConsumerGroup{cfg, cg, codec, cfg.EventHandler, cfg.ErrorHandler}, nil
 }
 
 // ReadMessages read messages from Kafka, decode them and propagete them
@@ -95,8 +101,9 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 			}
 
 			var (
-				eventMap map[string]interface{}
-				ok       bool
+				eventMap    map[string]interface{}
+				ok          bool
+				consumerMsg *ConsumerMessage
 			)
 
 			subject, event, err := rgc.codec.Decode(msg.Value)
@@ -111,7 +118,7 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 				goto commit
 			}
 
-			err = rgc.handler(&ConsumerMessage{
+			consumerMsg = &ConsumerMessage{
 				Key:       msg.Key,
 				Topic:     msg.Topic,
 				Partition: msg.Partition,
@@ -119,9 +126,17 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 				Subject:   subject,
 				Timestamp: msg.Timestamp,
 				Event:     eventMap,
-			})
-			if err != nil {
-				break // when handler returns an error we don't commit the message
+			}
+
+			for {
+				// As long as handler returns an error we retry the same message
+				// infinitely. Client must know which errors cannnot be commited 
+				// and should stop the consumption loop and which others not
+				err = rgc.handler(consumerMsg)
+				if err == nil {
+					break
+				}
+				time.Sleep(rgc.cfg.ClientRetryPeriod)
 			}
 
 		commit:
