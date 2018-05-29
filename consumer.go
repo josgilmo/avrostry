@@ -21,7 +21,7 @@ type ConsumerMessage struct {
 	Event     map[string]interface{}
 }
 
-func (cm *ConsumerMessage) GetFieldFieldValuesFromEvent(fieldsToRetreive map[string]interface{}) error {
+func (cm *ConsumerMessage) GetFieldValuesFromEvent(fieldsToRetreive map[string]interface{}) error {
 
 	var (
 		ok bool
