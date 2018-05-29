@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,9 +20,9 @@ func ErrorHandler(err error) {
 	fmt.Println(err)
 }
 
-func EventHandler(msg *avrostry.ConsumerMessage) error {
+func EventHandler(msg *avrostry.ConsumerMessage) bool {
 	if msg.Subject != (Employee{}).Subject() {
-		return errors.New("unknown subject")
+		return true
 	}
 	employee := StringMapToEmployee(msg.Event)
 	spew.Dump(*employee)
@@ -35,7 +34,7 @@ func EventHandler(msg *avrostry.ConsumerMessage) error {
 	fmt.Printf("\tSubject: %s\n", msg.Subject)
 	fmt.Printf("\tTimestamp: %s\n", msg.Timestamp)
 
-	return nil
+	return true
 }
 
 func main() {

@@ -1,7 +1,9 @@
 package avrostry
 
 import (
+	"fmt"
 	"context"
+	"math/rand"
 	"time"
 
 	"github.com/Shopify/sarama"
@@ -19,10 +21,18 @@ type ConsumerMessage struct {
 	Event     map[string]interface{}
 }
 
-type EventHandler func(*ConsumerMessage) error
+type DiscardedMessageError struct {
+	msg *ConsumerMessage
+}
 
-func NullEventHandler(*ConsumerMessage) error {
-	return nil
+func (e *DiscardedMessageError) Error() string {
+	return fmt.Sprintf("discarded message: key: %s, topic: %s, partition: %d, offset: %d", string(e.msg.Key), e.msg.Topic, e.msg.Partition, e.msg.Offset)
+}
+
+type EventHandler func(*ConsumerMessage) (shouldCommit bool)
+
+func NullEventHandler(*ConsumerMessage) bool {
+	return true
 }
 
 type ErrorHandler func(error)
@@ -41,20 +51,21 @@ type consumerConfig struct {
 	CacheCodec           *CacheCodec
 	EventHandler         EventHandler
 	ErrorHandler         ErrorHandler
-	// TODO: replace this by an exponential backoff such as:
-	//   https://github.com/cenkalti/backoff
-	ClientRetryPeriod time.Duration
+	// Backoff config
+	MaxRetries         int // 0 for infinite retries
+	MaxIntervalSeconds int // max seconds to sleep between retries
 }
 
 func DefaultKafkaRegistryConsumerGroupCfg() consumerConfig {
 	return consumerConfig{
-		Offset:            sarama.OffsetOldest,
-		Version:           sarama.V0_10_0_0,
-		ProcessingTimeout: 10 * time.Second,
-		CacheCodec:        NewCacheCodec(),
-		EventHandler:      NullEventHandler,
-		ErrorHandler:      NullErrorHandler,
-		ClientRetryPeriod: 5 * time.Second,
+		Offset:             sarama.OffsetOldest,
+		Version:            sarama.V0_10_0_0,
+		ProcessingTimeout:  10 * time.Second,
+		CacheCodec:         NewCacheCodec(),
+		EventHandler:       NullEventHandler,
+		ErrorHandler:       NullErrorHandler,
+		MaxRetries:         0,
+		MaxIntervalSeconds: 30,
 	}
 }
 
@@ -63,6 +74,7 @@ type KafkaRegistryConsumerGroup struct {
 	cfg        consumerConfig
 	cg         *consumergroup.ConsumerGroup
 	codec      *KafkaAvroCodec
+	random     *rand.Rand
 	handler    EventHandler
 	errHandler ErrorHandler
 }
@@ -81,7 +93,13 @@ func NewKafkaStreamReaderRegistry(cfg consumerConfig) (*KafkaRegistryConsumerGro
 		return nil, err
 	}
 	codec := NewKafkaAvroCodec(cfg.SchemaRegistryClient, cfg.CacheCodec)
-	return &KafkaRegistryConsumerGroup{cfg, cg, codec, cfg.EventHandler, cfg.ErrorHandler}, nil
+	return &KafkaRegistryConsumerGroup{
+		cfg:        cfg,
+		cg:         cg,
+		codec:      codec,
+		random:     rand.New(rand.NewSource(time.Now().UnixNano())),
+		handler:    cfg.EventHandler,
+		errHandler: cfg.ErrorHandler}, nil
 }
 
 // ReadMessages read messages from Kafka, decode them and propagete them
@@ -104,6 +122,8 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 				eventMap    map[string]interface{}
 				ok          bool
 				consumerMsg *ConsumerMessage
+				retry       int
+				backoff     float64
 			)
 
 			subject, event, err := rgc.codec.Decode(msg.Value)
@@ -129,14 +149,33 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 			}
 
 			for {
-				// As long as handler returns an error we retry the same message
-				// infinitely. Client must know which errors cannnot be commited 
-				// and should stop the consumption loop and which others not
-				err = rgc.handler(consumerMsg)
-				if err == nil {
+				if rgc.cfg.MaxRetries > 0 && retry >= rgc.cfg.MaxRetries {
+					rgc.errHandler(&DiscardedMessageError{consumerMsg})
+					break // max num of retries reached, commit message anyway
+				}
+
+				// As long as handler returns false we retry the same message.
+				// Clients must know in which situation messages cannnot be commited
+				// and should stop the consumption loop.
+
+				shouldCommit := rgc.handler(consumerMsg)
+				if shouldCommit {
 					break
 				}
-				time.Sleep(rgc.cfg.ClientRetryPeriod)
+
+				retry++
+				backoff = float64(uint(1) << uint(retry))         // 2 ^ retry
+				backoff += backoff * (0.1 * rgc.random.Float64()) // add a maximum of 10%
+				if backoff > float64(rgc.cfg.MaxIntervalSeconds) {
+					backoff = float64(rgc.cfg.MaxIntervalSeconds)
+				}
+
+				select {
+				case <-time.After(time.Second * time.Duration(backoff)):
+					break
+				case <-ctx.Done():
+					return nil
+				}
 			}
 
 		commit:
