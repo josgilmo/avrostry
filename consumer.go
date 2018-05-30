@@ -1,8 +1,8 @@
 package avrostry
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -19,6 +19,58 @@ type ConsumerMessage struct {
 	Subject   string
 	Timestamp time.Time
 	Event     map[string]interface{}
+}
+
+func (cm *ConsumerMessage) GetFieldValuesFromEvent(fieldsToRetreive map[string]interface{}) error {
+
+	var (
+		ok bool
+	)
+
+	for fieldName, target := range fieldsToRetreive {
+
+		field, found := cm.Event[fieldName]
+		if !found {
+			return errors.New("The event content is not valid")
+		}
+		switch t := target.(type) {
+		case *string:
+			*(target).(*string), ok = field.(string)
+		case *[]string:
+			*(target).(*[]string), ok = field.([]string)
+		case *[]byte:
+			*(target).(*[]byte), ok = field.([]byte)
+		case *bool:
+			*(target).(*bool), ok = field.(bool)
+		case *int:
+			*(target).(*int), ok = field.(int)
+		case *int16:
+			*(target).(*int16), ok = field.(int16)
+		case *int32:
+			*(target).(*int32), ok = field.(int32)
+		case *int64:
+			*(target).(*int64), ok = field.(int64)
+		case *uint:
+			*(target).(*uint), ok = field.(uint)
+		case *uint16:
+			*(target).(*uint16), ok = field.(uint16)
+		case *uint32:
+			*(target).(*uint32), ok = field.(uint32)
+		case *uint64:
+			*(target).(*uint64), ok = field.(uint64)
+		case *float32:
+			*(target).(*float32), ok = field.(float32)
+		case *float64:
+			*(target).(*float64), ok = field.(float64)
+		default:
+			return errors.Errorf("Event field type %T not supported", t)
+		}
+		if !ok {
+			return errors.New("The event field type is not valid")
+		}
+	}
+
+	return nil
 }
 
 type DiscardedMessageError struct {
