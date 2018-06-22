@@ -81,6 +81,10 @@ func (e *DiscardedMessageError) Error() string {
 	return fmt.Sprintf("discarded message: key: %s, topic: %s, partition: %d, offset: %d", string(e.msg.Key), e.msg.Topic, e.msg.Partition, e.msg.Offset)
 }
 
+func (e *DiscardedMessageError) Message() *ConsumerMessage {
+	return e.msg
+}
+
 type EventHandler func(*ConsumerMessage) (shouldCommit bool)
 
 func NullEventHandler(*ConsumerMessage) bool {
