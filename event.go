@@ -16,3 +16,9 @@ type DomainEvent interface {
 	// ID of the event, it will be the partition key
 	ID() string
 }
+
+// Message sending header
+type MessageHeader struct {
+	Key   string
+	Value string
+}
