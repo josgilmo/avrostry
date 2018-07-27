@@ -24,7 +24,7 @@ func DefaultProducerConfig() producerConfig {
 		RequiredAcks:  sarama.WaitForLocal,
 		ReturnSuccess: true,
 		Compression:   sarama.CompressionSnappy,
-		Version:       sarama.V0_10_0_0,
+		Version:       sarama.V0_11_0_0,
 		CacheCodec:    NewCacheCodec(),
 	}
 }
@@ -54,15 +54,29 @@ func NewKafkaRegistryProducer(cfg producerConfig) (*KafkaRegistryProducer, error
 
 // Publish encode to a Avro format and publish a DomainEvent to Kafka
 func (erp *KafkaRegistryProducer) Publish(topic string, event DomainEvent) (partition int32, offset int64, err error) {
+	return erp.PublishWithHeaders(topic, event, nil)
+}
+
+// Publish encode to a Avro format and publish a DomainEvent to Kafka
+func (erp *KafkaRegistryProducer) PublishWithHeaders(topic string, event DomainEvent, headers []MessageHeader) (partition int32, offset int64, err error) {
 	binary, err := erp.codec.Encode(event)
 	if err != nil {
 		return -1, -1, err
 	}
 
+	var saramaHeaders []sarama.RecordHeader
+	if len(headers) > 0 {
+		saramaHeaders = make([]sarama.RecordHeader, len(headers))
+		for z, h := range headers {
+			saramaHeaders[z] = sarama.RecordHeader{Key: []byte(h.Key), Value: []byte(h.Value)}
+		}
+	}
+
 	msg := &sarama.ProducerMessage{
-		Key:   sarama.StringEncoder(event.ID()),
-		Topic: topic,
-		Value: sarama.ByteEncoder(binary),
+		Key:     sarama.StringEncoder(event.ID()),
+		Topic:   topic,
+		Value:   sarama.ByteEncoder(binary),
+		Headers: saramaHeaders,
 	}
 
 	return erp.producer.SendMessage(msg)

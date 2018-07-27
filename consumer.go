@@ -18,6 +18,7 @@ type ConsumerMessage struct {
 	Offset    int64
 	Subject   string
 	Timestamp time.Time
+	Headers   []MessageHeader
 	Event     map[string]interface{}
 }
 
@@ -115,7 +116,7 @@ type consumerConfig struct {
 func DefaultKafkaRegistryConsumerGroupCfg() consumerConfig {
 	return consumerConfig{
 		Offset:             sarama.OffsetOldest,
-		Version:            sarama.V0_10_0_0,
+		Version:            sarama.V0_11_0_0,
 		ProcessingTimeout:  10 * time.Second,
 		CacheCodec:         NewCacheCodec(),
 		EventHandler:       NullEventHandler,
@@ -175,13 +176,25 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 			}
 
 			var (
-				eventMap    map[string]interface{}
-				ok          bool
-				consumerMsg *ConsumerMessage
-				retry       int
-				backoff     float64
-				maxBackoff  bool
+				eventMap       map[string]interface{}
+				ok             bool
+				consumerMsg    *ConsumerMessage
+				retry          int
+				backoff        float64
+				maxBackoff     bool
+				messageHeaders []MessageHeader
 			)
+
+			// Taking message headers
+			if len(msg.Headers) > 0 {
+				messageHeaders = make([]MessageHeader, len(msg.Headers))
+				for z, h := range msg.Headers {
+					messageHeaders[z] = MessageHeader{
+						Key:   string(h.Key),
+						Value: string(h.Value),
+					}
+				}
+			}
 
 			subject, event, err := rgc.codec.Decode(msg.Value)
 			if err != nil {
@@ -203,6 +216,7 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 				Subject:   subject,
 				Timestamp: msg.Timestamp,
 				Event:     eventMap,
+				Headers:   messageHeaders,
 			}
 
 			for {
