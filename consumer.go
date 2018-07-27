@@ -181,6 +181,7 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 				consumerMsg    *ConsumerMessage
 				retry          int
 				backoff        float64
+				maxBackoff     bool
 				messageHeaders []MessageHeader
 			)
 
@@ -233,11 +234,14 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 					break
 				}
 
-				retry++
-				backoff = float64(uint(1) << uint(retry))         // 2 ^ retry
-				backoff += backoff * (0.1 * rgc.random.Float64()) // add a maximum of 10%
-				if backoff > float64(rgc.cfg.MaxIntervalSeconds) {
-					backoff = float64(rgc.cfg.MaxIntervalSeconds)
+				if !maxBackoff {
+					retry++
+					backoff = float64(uint(1) << uint(retry))         // 2 ^ retry
+					backoff += backoff * (0.1 * rgc.random.Float64()) // add a maximum of 10%
+					if backoff > float64(rgc.cfg.MaxIntervalSeconds) {
+						backoff = float64(rgc.cfg.MaxIntervalSeconds)
+						maxBackoff = true
+					}
 				}
 
 				select {
