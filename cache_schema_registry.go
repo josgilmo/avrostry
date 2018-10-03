@@ -8,8 +8,8 @@ import (
 type CacheSchemaRegistry struct {
 	sync.RWMutex
 	//
-	schemaCache map[string]map[string]int32    // subject => schema => id
-	idCache     map[int32]string               // id => schema
+	schemaCache map[string]map[string]int32 // subject => schema => id
+	idCache     map[int32]string            // id => schema
 }
 
 // NewCacheSchemaRegistry CacheSchemaRegistry constructor.
@@ -46,20 +46,22 @@ func (cache *CacheSchemaRegistry) SetSchemaByID(id int32, schema string) {
 // GetIDBySubjectAndSquema Retrieve the schema id, given the subject and schema.
 func (cache *CacheSchemaRegistry) GetIDBySubjectAndSquema(subject, schema string) (int32, bool) {
 	cache.RLock()
-	schemaIDMap, exists := cache.schemaCache[subject]
-	if !exists {
+	schemaIDMap, existsSubject := cache.schemaCache[subject]
+	if !existsSubject {
 		cache.RUnlock()
 		cache.Lock()
 		// We have to double check here because more than one go routine could find exists=false
-		schemaIDMap, exists = cache.schemaCache[subject]
-		if !exists {
-			schemaIDMap = map[string]int32{}
-			cache.schemaCache[subject] = schemaIDMap
-		}
+		schemaIDMap, existsSubject = cache.schemaCache[subject]
 		cache.Unlock()
 		cache.RLock()
 	}
-	id, exists := schemaIDMap[schema]
+	var id int32
+	var exists bool
+
+	if existsSubject {
+		id, exists = schemaIDMap[schema]
+	}
+
 	cache.RUnlock()
 	return id, exists
 }
