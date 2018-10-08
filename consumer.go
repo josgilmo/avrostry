@@ -3,12 +3,14 @@ package avrostry
 import (
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
-	"github.com/wvanbergen/kafka/consumergroup"
+
+	cluster "github.com/bsm/sarama-cluster"
 )
 
 type ConsumerMessage struct {
@@ -98,7 +100,7 @@ func NullErrorHandler(error) {
 }
 
 type consumerConfig struct {
-	Zookeeper            []string
+	KafkaBrokers         []string
 	Name                 string
 	Topics               []string
 	Offset               int64
@@ -128,8 +130,8 @@ func DefaultKafkaRegistryConsumerGroupCfg() consumerConfig {
 
 // KafkaRegistryConsumerGroup Consumer Kafka tool with decoder.
 type KafkaRegistryConsumerGroup struct {
-	cfg        consumerConfig
-	cg         *consumergroup.ConsumerGroup
+	cfg consumerConfig
+	consumer   *cluster.Consumer
 	codec      *KafkaAvroCodec
 	random     *rand.Rand
 	handler    EventHandler
@@ -138,21 +140,21 @@ type KafkaRegistryConsumerGroup struct {
 
 // NewKafkaStreamReaderRegistry Constructor for KafkaRegistryConsumerGroup
 func NewKafkaStreamReaderRegistry(cfg consumerConfig) (*KafkaRegistryConsumerGroup, error) {
-	config := consumergroup.NewConfig()
+	config := cluster.NewConfig()
 	config.Config.Version = cfg.Version
-	config.Offsets.Initial = cfg.Offset
-	config.Offsets.ProcessingTimeout = cfg.ProcessingTimeout
+	config.Group.Session.Timeout = cfg.ProcessingTimeout
+	config.Consumer.Offsets.Initial = cfg.Offset
 	config.Consumer.Return.Errors = true
 
-	// join to consumer group
-	cg, err := consumergroup.JoinConsumerGroup(cfg.Name, cfg.Topics, cfg.Zookeeper, config)
+	consumer, err := cluster.NewConsumer(cfg.KafkaBrokers, cfg.Name, cfg.Topics, config)
 	if err != nil {
 		return nil, err
 	}
+
 	codec := NewKafkaAvroCodec(cfg.SchemaRegistryClient, cfg.CacheCodec)
 	return &KafkaRegistryConsumerGroup{
 		cfg:        cfg,
-		cg:         cg,
+		consumer:   consumer,
 		codec:      codec,
 		random:     rand.New(rand.NewSource(time.Now().UnixNano())),
 		handler:    cfg.EventHandler,
@@ -167,17 +169,23 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 
-		case err := <-rgc.cg.Errors():
+		case err, ok := <-rgc.consumer.Errors():
+			if !ok {
+				return io.ErrClosedPipe
+			}
 			rgc.errHandler(errors.Wrap(err, "received error from kafka"))
 
-		case msg := <-rgc.cg.Messages():
+		case msg, ok := <-rgc.consumer.Messages():
+			if !ok {
+				return io.ErrClosedPipe
+			}
+
 			if msg.Value == nil {
 				break
 			}
 
 			var (
 				eventMap       map[string]interface{}
-				ok             bool
 				consumerMsg    *ConsumerMessage
 				retry          int
 				backoff        float64
@@ -253,12 +261,16 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 			}
 
 		commit:
-			// commit to zookeeper that message
-			// this prevents read message multiple times after restart
-			err = rgc.cg.CommitUpto(msg)
+			// commit message, this prevents read message multiple times after restart
+			rgc.consumer.MarkOffset(msg, "")
+			err = rgc.consumer.CommitOffsets()
 			if err != nil {
 				rgc.errHandler(errors.Wrap(err, "could not commit message"))
 			}
 		}
 	}
+}
+
+func (rgc *KafkaRegistryConsumerGroup) Close() error {
+	return rgc.consumer.Close()
 }

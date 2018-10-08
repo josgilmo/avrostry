@@ -41,7 +41,7 @@ func main() {
 	cfg := avrostry.DefaultKafkaRegistryConsumerGroupCfg()
 	cfg.Name = ConsumerGroup
 	cfg.Topics = []string{KafkaTopic}
-	cfg.Zookeeper = []string{Zookeeper}
+	cfg.KafkaBrokers = []string{KafkaAddr}
 	cfg.SchemaRegistryClient = avrostry.NewSchemaRegistryManager(
 		SchemaRegistryURL,
 		avrostry.NewCacheSchemaRegistry(),
@@ -56,6 +56,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer kafkaConsumerManager.Close()
 
 	period := 60 * time.Second
 	// Run for a period
