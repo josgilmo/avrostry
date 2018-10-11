@@ -110,6 +110,8 @@ type consumerConfig struct {
 	CacheCodec           *CacheCodec
 	EventHandler         EventHandler
 	ErrorHandler         ErrorHandler
+	// If we receive this amount of errors in a row we finish the consumer, 0 to disable
+	ErrorThreshold int
 	// Backoff config
 	MaxRetries         int // 0 for infinite retries
 	MaxIntervalSeconds int // max seconds to sleep between retries
@@ -123,6 +125,7 @@ func DefaultKafkaRegistryConsumerGroupCfg() consumerConfig {
 		CacheCodec:         NewCacheCodec(),
 		EventHandler:       NullEventHandler,
 		ErrorHandler:       NullErrorHandler,
+		ErrorThreshold:     10,
 		MaxRetries:         0,
 		MaxIntervalSeconds: 30,
 	}
@@ -130,7 +133,7 @@ func DefaultKafkaRegistryConsumerGroupCfg() consumerConfig {
 
 // KafkaRegistryConsumerGroup Consumer Kafka tool with decoder.
 type KafkaRegistryConsumerGroup struct {
-	cfg consumerConfig
+	cfg        consumerConfig
 	consumer   *cluster.Consumer
 	codec      *KafkaAvroCodec
 	random     *rand.Rand
@@ -164,6 +167,10 @@ func NewKafkaStreamReaderRegistry(cfg consumerConfig) (*KafkaRegistryConsumerGro
 // ReadMessages read messages from Kafka, decode them and propagete them
 // to handler, only returns when context is cancelled
 func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
+	var (
+		nErrors int
+	)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -173,6 +180,12 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 			if !ok {
 				return io.ErrClosedPipe
 			}
+			
+			nErrors++
+			if rgc.cfg.ErrorThreshold > 0 && nErrors >= rgc.cfg.ErrorThreshold {
+				return errors.New("too many kafka errors")
+			}
+
 			rgc.errHandler(errors.Wrap(err, "received error from kafka"))
 
 		case msg, ok := <-rgc.consumer.Messages():
@@ -183,6 +196,8 @@ func (rgc *KafkaRegistryConsumerGroup) ReadMessages(ctx context.Context) error {
 			if msg.Value == nil {
 				break
 			}
+
+			nErrors = 0
 
 			var (
 				eventMap       map[string]interface{}
